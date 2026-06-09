@@ -138,6 +138,16 @@ tr.acc-row:hover{background:var(--surface2);}
 .name-cell{font-weight:500;font-size:13px;line-height:1.45;max-width:320px;word-break:break-word;}
 .name-cell mark{background:#fef08a;color:#713f12;border-radius:2px;padding:0 2px;}
 @media(prefers-color-scheme:dark){.name-cell mark{background:#713f12;color:#fef08a;}}
+@media(max-width:600px){
+  table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .name-cell{min-width:160px;max-width:220px;white-space:normal;word-break:break-word;font-size:12px;}
+  thead th{font-size:10px;padding:7px 8px;white-space:nowrap;}
+  tbody td{padding:7px 8px;font-size:12px;}
+  .qty-val{font-size:13px;}
+  .t-input{width:44px;font-size:11px;}
+  .reassign-btn{font-size:10px;padding:2px 5px;}
+  .bar-bg{min-width:50px;}
+}
 .qty-val{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;}
 .qty-val.danger{color:var(--danger);} .qty-val.warning{color:var(--warning);}
 .bar-bg{height:4px;border-radius:99px;background:var(--surface3);overflow:hidden;min-width:80px;}
@@ -218,8 +228,8 @@ tr.acc-row:hover{background:var(--surface2);}
 .no-input{background:var(--surface2);border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:7px 10px;font-size:13px;color:var(--text);outline:none;font-family:inherit;width:100%;}
 .no-input:focus{border-color:var(--accent);}
 .no-dd{position:relative;}
-.no-dropdown{position:absolute;z-index:200;width:100%;margin-top:3px;background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius-sm);max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.15);display:none;}
-.no-dd-item{padding:8px 12px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border);}
+.no-dropdown{position:absolute;z-index:200;width:100%;margin-top:3px;background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius-sm);max-height:52vh;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.15);display:none;}
+.no-dd-item{padding:12px 14px;font-size:14px;cursor:pointer;border-bottom:1px solid var(--border);line-height:1.4;}
 .no-dd-item:last-child{border-bottom:none;}
 .no-dd-item:hover,.no-dd-item.active{background:var(--surface2);}
 .no-items-list{margin-top:.85rem;display:flex;flex-direction:column;gap:4px;}
@@ -273,6 +283,10 @@ tr.acc-row:hover{background:var(--surface2);}
         <button class="icon-btn primary" onclick="openUploadModal()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           上傳庫存
+        </button>
+        <button class="icon-btn" onclick="openArchivedModal()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+          封存清單
         </button>
         <button class="icon-btn" onclick="openSupModal()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -510,6 +524,7 @@ window.addEventListener('DOMContentLoaded',checkSession);
 // ── State ─────────────────────────────────────────────────────
 let inventoryData=[],supplierRules=[],activeTab='all',thresholds={},dragSrcId=null;
 let assignFilter='all', reassignTarget=null;
+let archivedSet=new Set(); // product_names that are archived
 
 // ── Load all data ─────────────────────────────────────────────
 async function loadAll(){
@@ -520,6 +535,8 @@ async function loadAll(){
   try{
     const{data:inv}=await sb.from('inventory').select('product_name,quantity,supplier_id').order('product_name');
     inventoryData=inv||[];
+    const{data:arch}=await sb.from('archived_products').select('product_name');
+    archivedSet=new Set((arch||[]).map(r=>r.product_name));
     const{data:rules}=await sb.from('supplier_rules').select('*').order('sort_order');
     supplierRules=rules||[];
     const{data:meta}=await sb.from('inventory_meta').select('last_import,row_count').eq('id',1).single();
@@ -580,7 +597,13 @@ function handleFile(f){
       document.getElementById('progress-spinner').style.display='none';
       label.textContent='上傳完成！';
       status.textContent=`✓ 成功匯入 ${withSupplier.length} 筆`;status.className='upload-status ok';
-      setTimeout(()=>{closeUploadModal();loadAll();},1200);
+      // Check for archived products that now have stock
+      const reactivateCandidates=deduped.filter(r=>archivedSet.has(r.product_name)&&(parseFloat(r.quantity)||0)>0);
+      if(reactivateCandidates.length){
+        setTimeout(()=>{closeUploadModal();loadAll().then(()=>showReactivateModal(reactivateCandidates));},1200);
+      } else {
+        setTimeout(()=>{closeUploadModal();loadAll();},1200);
+      }
     }catch(err){
       bar.style.cssText='width:100%;background:var(--danger)';
       document.getElementById('progress-spinner').style.display='none';
@@ -668,26 +691,57 @@ function renderAssignList(){
     return;
   }
 
-  el.innerHTML=items.map(r=>{
+  // Render with checkboxes for batch assign
+  el.innerHTML=`<div style="display:flex;gap:6px;margin-bottom:.75rem;flex-wrap:wrap;align-items:center;">
+    <button class="icon-btn" style="font-size:11px;padding:4px 10px;" onclick="assignSelectAll(true)">全選</button>
+    <button class="icon-btn" style="font-size:11px;padding:4px 10px;" onclick="assignSelectAll(false)">取消全選</button>
+    <span style="font-size:11px;color:var(--text3);" id="assign-sel-count">0 項已選</span>
+    <div style="flex:1;"></div>
+    <select id="assign-batch-sup" style="font-size:12px;padding:5px 8px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);cursor:pointer;">
+      <option value="">批次指派至…</option>
+      ${supplierRules.map(s=>`<option value="${esc(s.supplier_id)}">${esc(s.name)}</option>`).join('')}
+      <option value="__uncat__">— 移至未分類 —</option>
+    </select>
+    <button class="icon-btn primary" style="font-size:11px;padding:4px 10px;" onclick="batchAssign()">確認</button>
+  </div>`+
+  items.map(r=>{
     const sid=r.supplier_id;
     const supName=sid?supplierRules.find(s=>s.supplier_id===sid)?.name||sid:'未分類';
     const supColor=sid?'var(--accent)':'var(--text3)';
     const safeName=esc(r.product_name);
-    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;">
+    return `<div style="display:flex;align-items:center;gap:8px;padding:9px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;">
+      <input type="checkbox" class="assign-cb item-check" data-name="${safeName}" onchange="updateAssignCount()" style="flex-shrink:0;">
       <div style="flex:1;min-width:0;">
-        <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${safeName}">${hi(r.product_name,q)}</div>
-        <div style="font-size:11px;color:${supColor};margin-top:2px;">${esc(supName)}</div>
+        <div style="font-size:13px;font-weight:500;line-height:1.4;word-break:break-word;">${hi(r.product_name,q)}</div>
+        <div style="font-size:11px;color:${supColor};margin-top:2px;">${esc(supName)} · ${parseFloat(r.quantity)||0} 件</div>
       </div>
-      <div style="font-size:11px;color:var(--text3);flex-shrink:0;">${parseFloat(r.quantity)||0} 件</div>
-      <select onchange="quickAssign('${safeName}',this)" style="font-size:11px;padding:4px 6px;border:1px solid var(--border-strong);border-radius:4px;background:var(--surface2);color:var(--text);cursor:pointer;flex-shrink:0;max-width:130px;">
-        <option value="">${sid?'重新指派…':'指派至…'}</option>
-        ${supplierRules.map(s=>`<option value="${esc(s.supplier_id)}"${s.supplier_id===sid?' selected':''}>${esc(s.name)}</option>`).join('')}
-        ${sid?'<option value="__uncat__">— 移至未分類 —</option>':''}
-      </select>
     </div>`;
   }).join('');
 }
 
+function updateAssignCount(){
+  const n=document.querySelectorAll('.assign-cb:checked').length;
+  const el=document.getElementById('assign-sel-count');
+  if(el)el.textContent=n+' 項已選';
+}
+function assignSelectAll(checked){
+  document.querySelectorAll('.assign-cb').forEach(cb=>cb.checked=checked);
+  updateAssignCount();
+}
+async function batchAssign(){
+  const val=document.getElementById('assign-batch-sup')?.value;
+  if(!val){alert('請先選擇要指派的供應商');return;}
+  const checked=document.querySelectorAll('.assign-cb:checked');
+  if(!checked.length){alert('請先勾選要指派的品項');return;}
+  const names=[...checked].map(c=>c.dataset.name);
+  const newSid=val==='__uncat__'?null:val;
+  for(const name of names){
+    await sb.from('inventory').update({supplier_id:newSid}).eq('product_name',name);
+    const item=inventoryData.find(r=>r.product_name===name);
+    if(item)item.supplier_id=newSid;
+  }
+  rerender();renderAssignList();
+}
 async function quickAssign(productName,selectEl){
   const val=selectEl.value;
   if(!val){return;}
@@ -851,6 +905,7 @@ function rerender(){
     const name=(r.product_name||'').trim();
     const qty=parseFloat(r.quantity)||0;
     if(isExcluded(name))return;
+    if(archivedSet.has(name))return;
     if(hideZeros&&qty<=0)return;
     if(q&&!name.toLowerCase().includes(q))return;
     total++;
@@ -917,12 +972,13 @@ function rerender(){
       const qClass='qty-val'+(r.s==='critical'?' danger':r.s==='low'?' warning':'');
       const badge=r.s==='critical'?'<span class="badge badge-danger">危急</span>':r.s==='low'?'<span class="badge badge-warning">低庫存</span>':'<span class="badge badge-ok">正常</span>';
       return `<tr class="${isAcc?'acc-row':''}">
+        <td style="width:28px;padding-right:0;"><input type="checkbox" class="row-cb bulk-cb" data-name="${esc(r.name)}" onchange="updateBulkBar()"></td>
         <td class="name-cell">${hi(r.name,q)}</td>
         <td><span class="${qClass}">${r.qty}</span></td>
         <td><div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${barColor};"></div></div></td>
         <td><input type="number" class="t-input" min="0" value="${r.t}" data-name="${esc(r.name)}" oninput="setThreshold(this)"></td>
         <td>${badge}</td>
-        <td><button class="reassign-btn" onclick="openReassignModal('${esc(r.name)}')">更改供應商</button></td>
+        <td style="white-space:nowrap;"><button class="reassign-btn" onclick="openReassignModal('${esc(r.name)}')">更改供應商</button></td>
       </tr>`;
     }
 
@@ -936,11 +992,107 @@ function rerender(){
         <div class="sup-badges">${alerts.join('')}</div>
       </div>
       <div class="table-card"><table>
-        <thead><tr><th>品名</th><th>庫存</th><th style="min-width:90px;">庫存量</th><th>警示閾值</th><th>狀態</th><th></th></tr></thead>
+        <thead><tr><th style="width:28px;padding-right:0;"><input type="checkbox" class="row-cb" onchange="selectAllRows(this)" title="全選/取消"></th><th>品名</th><th>庫存</th><th style="min-width:90px;">庫存量</th><th>警示閾值</th><th>狀態</th><th></th></tr></thead>
         <tbody>${mainHTML}${accDivider}${accHTML}</tbody>
       </table></div>
     </div>`;
   }).join('');
+}
+
+// ── Archive / Unarchive ──────────────────────────────────────
+async function archiveProduct(productName) {
+  if(!confirm(`封存「${productName}」？\n封存後此品項將從所有檢視中隱藏，可隨時重新啟用。`)) return;
+  const {error} = await sb.from('archived_products').upsert({product_name: productName}, {onConflict:'product_name'});
+  if(error){alert('封存失敗：'+error.message);return;}
+  archivedSet.add(productName);
+  rerender();
+  if(currentPageTab==='reorder') renderReorderTab();
+}
+
+async function unarchiveProduct(productName) {
+  const {error} = await sb.from('archived_products').delete().eq('product_name', productName);
+  if(error){alert('失敗：'+error.message);return;}
+  archivedSet.delete(productName);
+  rerender();
+}
+
+function openArchivedModal() {
+  const el = document.getElementById('archived-list');
+  if(!archivedSet.size){el.innerHTML='<div style="font-size:13px;color:var(--text3);">目前無封存品項</div>';
+  } else {
+    el.innerHTML=[...archivedSet].sort().map(name=>`
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;gap:8px;">
+        <span style="font-size:12px;font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(name)}</span>
+        <button class="reassign-btn" style="flex-shrink:0;" onclick="unarchiveProduct('${esc(name)}');renderArchivedModal();">重新啟用</button>
+      </div>`).join('');
+  }
+  document.getElementById('archived-modal').style.display='flex';
+}
+
+function renderArchivedModal(){
+  const el=document.getElementById('archived-list');
+  if(!archivedSet.size){el.innerHTML='<div style="font-size:13px;color:var(--text3);">目前無封存品項</div>';return;}
+  el.innerHTML=[...archivedSet].sort().map(name=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;gap:8px;">
+      <span style="font-size:12px;font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(name)}</span>
+      <button class="reassign-btn" style="flex-shrink:0;" onclick="unarchiveProduct('${esc(name)}');renderArchivedModal();">重新啟用</button>
+    </div>`).join('');
+}
+
+function closeArchivedModal(){document.getElementById('archived-modal').style.display='none';}
+
+function showReactivateModal(candidates) {
+  const el = document.getElementById('reactivate-list');
+  el.innerHTML = candidates.map(r=>`
+    <label style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;cursor:pointer;">
+      <input type="checkbox" checked data-name="${esc(r.product_name)}" style="accent-color:var(--accent);width:15px;height:15px;flex-shrink:0;">
+      <span style="flex:1;font-size:12px;font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.product_name)}</span>
+      <span style="font-size:11px;color:var(--ok);flex-shrink:0;">庫存 ${parseFloat(r.quantity)||0}</span>
+    </label>`).join('');
+  document.getElementById('reactivate-modal').style.display='flex';
+}
+
+function closeReactivateModal(){document.getElementById('reactivate-modal').style.display='none';}
+
+async function confirmReactivate() {
+  const checks = document.querySelectorAll('#reactivate-list input[type=checkbox]:checked');
+  const names = [...checks].map(c=>c.dataset.name);
+  if(!names.length){closeReactivateModal();return;}
+  for(const name of names){
+    await sb.from('archived_products').delete().eq('product_name',name);
+    archivedSet.delete(name);
+  }
+  closeReactivateModal();
+  rerender();
+  if(currentPageTab==='reorder') renderReorderTab();
+}
+
+// ── Bulk Archive ──────────────────────────────────────────────
+function updateBulkBar(){
+  const checked=document.querySelectorAll('.bulk-cb:checked');
+  const bar=document.getElementById('bulk-bar');
+  const count=document.getElementById('bulk-count');
+  if(checked.length>0){bar.classList.remove('hidden');count.textContent=checked.length+' 項已選';}
+  else{bar.classList.add('hidden');}
+}
+function selectAllRows(masterCb){
+  document.querySelectorAll('.bulk-cb').forEach(cb=>cb.checked=masterCb.checked);
+  updateBulkBar();
+}
+function clearBulkSelect(){
+  document.querySelectorAll('.bulk-cb,.row-cb').forEach(cb=>cb.checked=false);
+  document.getElementById('bulk-bar').classList.add('hidden');
+}
+async function bulkArchive(){
+  const names=[...document.querySelectorAll('.bulk-cb:checked')].map(c=>c.dataset.name);
+  if(!names.length)return;
+  if(!confirm('確定封存 '+names.length+' 個品項？'))return;
+  for(const name of names){
+    await sb.from('archived_products').upsert({product_name:name},{onConflict:'product_name'});
+    archivedSet.add(name);
+  }
+  clearBulkSelect();
+  rerender();
 }
 
 // ── Page Tab Navigation ───────────────────────────────────────
@@ -992,6 +1144,7 @@ function renderReorderTab() {
     let rows = inventoryData.filter(r => {
       const name = (r.product_name||'').trim();
       if(isExcluded(name)) return false;
+      if(archivedSet.has(name)) return false;
       if(showAll) return true;
       const t = thresholds[name] !== undefined ? thresholds[name] : defT;
       return (parseFloat(r.quantity)||0) <= t;
@@ -1377,3 +1530,42 @@ async function saveNewOrder() {
 
 </body>
 </html>
+
+<!-- Archived Products Modal -->
+<div id="archived-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeArchivedModal()">
+  <div class="modal" style="max-width:500px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;">
+    <div style="padding:1.25rem 1.5rem 1rem;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div class="modal-title">封存清單</div>
+        <button onclick="closeArchivedModal()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--text3);">✕</button>
+      </div>
+      <div class="modal-sub" style="margin-top:4px;">已封存的品項不會出現在庫存、補貨清單中。點擊「重新啟用」可隨時恢復。</div>
+    </div>
+    <div style="overflow-y:auto;flex:1;padding:1.25rem 1.5rem;">
+      <div id="archived-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+    </div>
+    <div style="padding:.85rem 1.5rem;border-top:1px solid var(--border);flex-shrink:0;display:flex;justify-content:flex-end;">
+      <button class="modal-cancel" onclick="closeArchivedModal()">關閉</button>
+    </div>
+  </div>
+</div>
+
+<!-- Reactivate Products Modal -->
+<div id="reactivate-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeReactivateModal()">
+  <div class="modal" style="max-width:500px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;">
+    <div style="padding:1.25rem 1.5rem 1rem;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div class="modal-title">📦 封存品項有庫存變動</div>
+        <button onclick="closeReactivateModal()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--text3);">✕</button>
+      </div>
+      <div class="modal-sub" style="margin-top:4px;">以下封存品項在最新 XLS 中出現庫存，是否要重新啟用？</div>
+    </div>
+    <div style="overflow-y:auto;flex:1;padding:1.25rem 1.5rem;">
+      <div id="reactivate-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+    </div>
+    <div style="padding:.85rem 1.5rem;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px;justify-content:flex-end;">
+      <button class="modal-cancel" onclick="closeReactivateModal()">全部保持封存</button>
+      <button class="modal-submit" onclick="confirmReactivate()">重新啟用勾選項目</button>
+    </div>
+  </div>
+</div>
