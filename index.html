@@ -392,6 +392,13 @@ tr.acc-row:hover{background:var(--surface2);}
   </div><!-- end app -->
 </div><!-- end app-screen -->
 
+<!-- Bulk Archive Floating Bar -->
+<div id="bulk-bar" class="bulk-bar hidden">
+  <span id="bulk-count">0 項已選</span>
+  <button class="bulk-bar-btn danger" onclick="bulkArchive()">封存所選</button>
+  <button class="bulk-bar-btn" onclick="clearBulkSelect()">取消</button>
+</div>
+
 <!-- Upload Modal -->
 <div id="upload-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeUploadModal()">
   <div class="modal" style="max-width:460px;padding:1.5rem;">
@@ -704,7 +711,8 @@ function renderAssignList(){
       ${supplierRules.map(s=>`<option value="${esc(s.supplier_id)}">${esc(s.name)}</option>`).join('')}
       <option value="__uncat__">— 移至未分類 —</option>
     </select>
-    <button class="icon-btn primary" style="font-size:11px;padding:4px 10px;" onclick="batchAssign()">確認</button>
+    <button class="icon-btn primary" style="font-size:11px;padding:4px 10px;" onclick="batchAssign()">確認指派</button>
+    <button class="icon-btn" style="font-size:11px;padding:4px 10px;color:var(--danger);border-color:var(--danger-border);" onclick="batchArchiveFromAssign()">封存所選</button>
   </div>`+
   items.map(r=>{
     const sid=r.supplier_id;
@@ -730,6 +738,19 @@ function assignSelectAll(checked){
   document.querySelectorAll('.assign-cb').forEach(cb=>cb.checked=checked);
   updateAssignCount();
 }
+async function batchArchiveFromAssign(){
+  const names=[...document.querySelectorAll('.assign-cb:checked')].map(c=>c.dataset.name);
+  if(!names.length){alert('請先勾選要封存的品項');return;}
+  if(!confirm('確定封存 '+names.length+' 個品項？\n封存後可在「封存清單」中重新啟用。'))return;
+  for(const name of names){
+    await sb.from('archived_products').upsert({product_name:name},{onConflict:'product_name'});
+    archivedSet.add(name);
+  }
+  rerender();
+  renderAssignList();
+  alert('✅ 已封存 '+names.length+' 個品項。');
+}
+
 async function batchAssign(){
   const val=document.getElementById('assign-batch-sup')?.value;
   if(!val){alert('請先選擇要指派的供應商');return;}
@@ -1025,10 +1046,17 @@ async function openArchivedModal() {
   document.getElementById('archived-modal').style.display='flex';
   const el = document.getElementById('archived-list');
   el.innerHTML='<div style="color:var(--text3);font-size:13px;">載入中…</div>';
-  // Always reload fresh from Supabase
-  const {data} = await sb.from('archived_products').select('product_name').order('product_name');
-  archivedSet = new Set((data||[]).map(r=>r.product_name));
-  renderArchivedModal();
+  try {
+    const {data, error} = await sb.from('archived_products').select('product_name').order('product_name');
+    if(error) {
+      el.innerHTML=`<div style="font-size:13px;color:var(--danger);">⚠️ 無法讀取封存清單<br><span style="font-size:11px;color:var(--text3);">請確認已在 Supabase 執行建表 SQL：<br>create table archived_products (product_name text primary key);</span></div>`;
+      return;
+    }
+    archivedSet = new Set((data||[]).map(r=>r.product_name));
+    renderArchivedModal();
+  } catch(e) {
+    el.innerHTML=`<div style="font-size:13px;color:var(--danger);">⚠️ 封存清單載入失敗：${e.message}</div>`;
+  }
 }
 
 function renderArchivedModal(){
