@@ -240,6 +240,14 @@ tr.acc-row:hover{background:var(--surface2);}
 .no-item-remove{background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;flex-shrink:0;padding:0 2px;}
 .no-item-remove:hover{color:var(--danger);}
 
+/* Bulk archive floating bar */
+.bulk-bar{position:fixed;top:1rem;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;border-radius:99px;padding:11px 22px;display:flex;align-items:center;gap:14px;box-shadow:0 4px 24px rgba(0,0,0,.35);z-index:999;font-size:14px;font-weight:500;transition:opacity .15s,transform .15s;white-space:nowrap;}
+.bulk-bar.hidden{opacity:0;pointer-events:none;transform:translateX(-50%) translateY(-8px);}
+.bulk-bar-btn{background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:99px;padding:6px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;}
+.bulk-bar-btn:hover{background:rgba(255,255,255,.32);}
+.bulk-bar-btn.danger{background:rgba(220,38,38,.6);}
+.bulk-bar-btn.danger:hover{background:rgba(220,38,38,.85);}
+
 /* Upload modal */
 .drop-zone{border:2px dashed var(--border-strong);border-radius:var(--radius);padding:2.5rem 1.5rem;text-align:center;cursor:pointer;transition:all .15s;margin-bottom:1rem;}
 .drop-zone:hover,.drop-zone.drag-over{border-color:var(--accent);background:rgba(37,99,235,0.04);}
