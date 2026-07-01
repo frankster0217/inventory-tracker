@@ -400,10 +400,14 @@ tr.acc-row:hover{background:var(--surface2);}
   </div><!-- end app -->
 </div><!-- end app-screen -->
 
-<!-- Bulk Archive Floating Bar -->
-<div id="bulk-bar" class="bulk-bar hidden">
-  <span id="bulk-count">0 項已選</span>
-  <button class="bulk-bar-btn danger" onclick="bulkArchive()">封存所選</button>
+<!-- Bulk Action Floating Bar -->
+<div id="bulk-bar" class="bulk-bar hidden" style="flex-wrap:wrap;border-radius:16px;padding:10px 16px;">
+  <span id="bulk-count" style="font-size:14px;font-weight:600;margin-right:4px;">0 項已選</span>
+  <select id="bulk-sup-select" style="font-size:13px;padding:5px 10px;border-radius:8px;border:none;background:rgba(255,255,255,.2);color:#fff;cursor:pointer;max-width:160px;">
+    <option value="">指派至供應商…</option>
+  </select>
+  <button class="bulk-bar-btn" onclick="bulkAssign()">✓ 指派</button>
+  <button class="bulk-bar-btn danger" onclick="bulkArchive()">封存</button>
   <button class="bulk-bar-btn" onclick="clearBulkSelect()">取消</button>
 </div>
 
@@ -466,6 +470,18 @@ tr.acc-row:hover{background:var(--surface2);}
         <div style="display:flex;gap:6px;margin-bottom:.85rem;flex-wrap:wrap;">
           <button class="icon-btn primary" id="filter-all" onclick="setAssignFilter('all')" style="font-size:11px;padding:4px 10px;">全部</button>
           <button class="icon-btn" id="filter-uncat" onclick="setAssignFilter('uncat')" style="font-size:11px;padding:4px 10px;">僅顯示未分類</button>
+        </div>
+        <!-- Persistent batch toolbar -->
+        <div id="assign-toolbar" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:.6rem;gap:6px;flex-wrap:wrap;align-items:center;">
+          <button class="icon-btn" style="font-size:12px;padding:5px 12px;" onclick="assignSelectAll(true)">全選</button>
+          <button class="icon-btn" style="font-size:12px;padding:5px 12px;" onclick="assignSelectAll(false)">取消全選</button>
+          <span style="font-size:12px;color:var(--text3);" id="assign-sel-count">0 項已選</span>
+          <div style="flex:1;"></div>
+          <select id="assign-batch-sup" style="font-size:13px;padding:6px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);cursor:pointer;">
+            <option value="">指派至供應商…</option>
+          </select>
+          <button class="icon-btn primary" style="font-size:12px;padding:5px 12px;" onclick="batchAssign()">✓ 指派</button>
+          <button class="icon-btn" style="font-size:12px;padding:5px 12px;color:var(--danger);border-color:var(--danger-border);" onclick="batchArchiveFromAssign()">封存</button>
         </div>
         <div id="assign-list" style="display:flex;flex-direction:column;gap:4px;max-height:380px;overflow-y:auto;"></div>
       </div>
@@ -708,21 +724,20 @@ function renderAssignList(){
     return;
   }
 
-  // Render with checkboxes for batch assign
-  el.innerHTML=`<div style="display:flex;gap:6px;margin-bottom:.75rem;flex-wrap:wrap;align-items:center;">
-    <button class="icon-btn" style="font-size:11px;padding:4px 10px;" onclick="assignSelectAll(true)">全選</button>
-    <button class="icon-btn" style="font-size:11px;padding:4px 10px;" onclick="assignSelectAll(false)">取消全選</button>
-    <span style="font-size:11px;color:var(--text3);" id="assign-sel-count">0 項已選</span>
-    <div style="flex:1;"></div>
-    <select id="assign-batch-sup" style="font-size:12px;padding:5px 8px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);cursor:pointer;">
-      <option value="">批次指派至…</option>
-      ${supplierRules.map(s=>`<option value="${esc(s.supplier_id)}">${esc(s.name)}</option>`).join('')}
-      <option value="__uncat__">— 移至未分類 —</option>
-    </select>
-    <button class="icon-btn primary" style="font-size:11px;padding:4px 10px;" onclick="batchAssign()">確認指派</button>
-    <button class="icon-btn" style="font-size:11px;padding:4px 10px;color:var(--danger);border-color:var(--danger-border);" onclick="batchArchiveFromAssign()">封存所選</button>
-  </div>`+
-  items.map(r=>{
+  // Show persistent toolbar, populate supplier dropdown once
+  const toolbar=document.getElementById('assign-toolbar');
+  if(toolbar) toolbar.style.display='flex';
+  const supSel=document.getElementById('assign-batch-sup');
+  if(supSel && supSel.options.length<=1){
+    supplierRules.forEach(s=>{
+      const o=document.createElement('option');
+      o.value=s.supplier_id; o.textContent=s.name; supSel.appendChild(o);
+    });
+    const u=document.createElement('option');
+    u.value='__uncat__'; u.textContent='— 移至未分類 —'; supSel.appendChild(u);
+  }
+
+  el.innerHTML=items.map(r=>{
     const sid=r.supplier_id;
     const supName=sid?supplierRules.find(s=>s.supplier_id===sid)?.name||sid:'未分類';
     const supColor=sid?'var(--accent)':'var(--text3)';
@@ -755,7 +770,13 @@ async function batchArchiveFromAssign(){
     archivedSet.add(name);
   }
   rerender();
-  renderAssignList();
+  // Remove archived rows in place
+  names.forEach(name=>{
+    document.querySelectorAll('.assign-cb').forEach(cb=>{
+      if(cb.dataset.name===name) cb.closest('div[style*="padding:9px"]')?.remove();
+    });
+  });
+  updateAssignCount();
   alert('✅ 已封存 '+names.length+' 個品項。');
 }
 
@@ -773,8 +794,14 @@ async function batchAssign(){
     if(item)item.supplier_id=newSid;
   }
   rerender();
-  renderAssignList();
-  alert('✅ 已將 '+names.length+' 個品項指派至「'+supName+'」');
+  // Update labels in place without re-rendering (preserves other checkboxes)
+  [...checked].forEach(cb=>{
+    const sub=cb.closest('div')?.querySelector('div:last-child div:last-child');
+    if(sub) sub.innerHTML=`<span style="color:var(--accent);">${esc(supName)}</span> · ${(sub.textContent||'').split('·')[1]||''}`;
+    cb.checked=false;
+  });
+  updateAssignCount();
+  alert('✅ 已指派 '+names.length+' 項至「'+supName+'」');
 }
 async function quickAssign(productName,selectEl){
   const val=selectEl.value;
@@ -1137,8 +1164,20 @@ function updateBulkBar(){
   const bar=document.getElementById('bulk-bar');
   const count=document.getElementById('bulk-count');
   if(!bar)return;
-  if(checked.length>0){bar.classList.remove('hidden');count.textContent=checked.length+' 項已選';}
-  else{bar.classList.add('hidden');}
+  if(checked.length>0){
+    bar.classList.remove('hidden');
+    count.textContent=checked.length+' 項已選';
+    // Populate supplier dropdown once
+    const sel=document.getElementById('bulk-sup-select');
+    if(sel && sel.options.length<=1){
+      supplierRules.forEach(s=>{
+        const o=document.createElement('option');
+        o.value=s.supplier_id; o.textContent=s.name; sel.appendChild(o);
+      });
+    }
+  } else {
+    bar.classList.add('hidden');
+  }
 }
 function selectAllRows(masterCb){
   document.querySelectorAll('#content .bulk-cb').forEach(cb=>cb.checked=masterCb.checked);
@@ -1150,6 +1189,23 @@ function clearBulkSelect(){
   const bar=document.getElementById('bulk-bar');
   if(bar)bar.classList.add('hidden');
 }
+async function bulkAssign(){
+  const val=document.getElementById('bulk-sup-select')?.value;
+  if(!val){alert('請先從下拉選單選擇供應商');return;}
+  const names=[...document.querySelectorAll('#content .bulk-cb:checked')].map(c=>c.dataset.name);
+  if(!names.length)return;
+  const newSid=val;
+  const supName=supplierRules.find(s=>s.supplier_id===newSid)?.name||newSid;
+  for(const name of names){
+    await sb.from('inventory').update({supplier_id:newSid}).eq('product_name',name);
+    const item=inventoryData.find(r=>r.product_name===name);
+    if(item)item.supplier_id=newSid;
+  }
+  clearBulkSelect();
+  rerender();
+  alert('✅ 已將 '+names.length+' 項指派至「'+supName+'」');
+}
+
 async function bulkArchive(){
   const names=[...document.querySelectorAll('#content .bulk-cb:checked')].map(c=>c.dataset.name);
   if(!names.length)return;
