@@ -100,13 +100,19 @@ input[type=number]:focus{border-color:var(--accent);}
 .toggle-label input:checked+.toggle-track .toggle-thumb{left:16px;}
 
 /* Tabs */
-.sup-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1.25rem;padding-top:8px;}
-.sup-tab-wrap{position:relative;display:inline-flex;}
-.sup-tab{display:flex;align-items:center;gap:6px;padding:7px 13px;border-radius:var(--radius-sm);border:1px solid var(--border-strong);background:var(--surface);color:var(--text2);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .12s;white-space:nowrap;user-select:none;}
-.sup-tab:hover{border-color:var(--text2);color:var(--text);}
-.sup-tab.active{background:var(--text);color:var(--bg);border-color:var(--text);}
+.sup-tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:1.25rem;padding-top:4px;}
+@media(max-width:960px){.sup-tabs{grid-template-columns:repeat(4,1fr);}}
+@media(max-width:680px){.sup-tabs{grid-template-columns:repeat(2,1fr);}}
+.sup-tab-wrap{position:relative;display:flex;min-width:0;}
+.sup-tab{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;font-family:inherit;transition:all .15s;width:100%;text-align:left;user-select:none;box-shadow:0 1px 3px rgba(0,0,0,.06);min-width:0;}
+.sup-tab:hover{border-color:var(--accent);background:var(--surface2);box-shadow:0 2px 8px rgba(0,0,0,.1);}
+.sup-tab.active{background:var(--text);color:var(--bg);border-color:var(--text);box-shadow:0 2px 10px rgba(0,0,0,.18);}
 .sup-tab.dragging{opacity:.4;}
-.sup-tab.drag-over-left{border-left:2px solid var(--accent);}
+.sup-tab.drag-over-left{border-left:3px solid var(--accent);}
+.sup-tab-meta{display:flex;align-items:center;gap:4px;width:100%;min-width:0;}
+.sup-tab-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600;line-height:1.3;}
+.sup-tab-brands{font-size:10px;font-weight:400;opacity:.55;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;line-height:1.4;display:block;margin-top:1px;}
+.sup-tab.active .sup-tab-brands{opacity:.65;}
 .tab-count{font-size:11px;opacity:.6;font-variant-numeric:tabular-nums;}
 .alert-dot{width:6px;height:6px;border-radius:50%;background:var(--danger);flex-shrink:0;}
 .sup-tab.active .alert-dot{background:rgba(255,255,255,.7);}
@@ -330,6 +336,11 @@ tr.acc-row:hover{background:var(--surface2);}
       </div>
     </div>
 
+    <!-- View toggle - lives outside main-content so stays visible when switching views -->
+    <div id="inv-view-toggle" style="display:none;gap:0;border:1px solid var(--border-strong);border-radius:8px;overflow:hidden;width:fit-content;margin-bottom:1rem;">
+      <button id="view-supplier-btn" onclick="setInventoryView('supplier')" style="padding:7px 16px;font-size:13px;font-weight:600;border:none;cursor:pointer;background:var(--accent);color:#fff;font-family:inherit;">🏪 供應商</button>
+      <button id="view-category-btn" onclick="setInventoryView('category')" style="padding:7px 16px;font-size:13px;font-weight:600;border:none;cursor:pointer;background:var(--surface2);color:var(--text2);font-family:inherit;">📦 品類</button>
+    </div>
     <div id="main-content" style="display:none;">
       <div class="summary" id="summary"></div>
       <div class="controls">
@@ -354,6 +365,11 @@ tr.acc-row:hover{background:var(--surface2);}
       <div class="result-info" id="result-info"></div>
       <div id="content"></div>
     </div><!-- end main-content -->
+
+    <!-- Category view — inside panel-inventory, sibling to main-content -->
+    <div id="category-view" style="display:none;">
+      <div id="category-content"></div>
+    </div>
     </div><!-- end panel-inventory -->
 
     <!-- TAB: 補貨清單 -->
@@ -364,6 +380,12 @@ tr.acc-row:hover{background:var(--surface2);}
           <div style="font-size:12px;color:var(--text3);margin-top:2px;">低庫存 SKU，含補貨連結與常用補貨量</div>
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <select id="reorder-tier-filter" onchange="renderReorderTab()" style="font-size:12px;padding:5px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);cursor:pointer;">
+            <option value="all">全部需補貨</option>
+            <option value="hot">🔥 熱銷優先</option>
+            <option value="active">✅ 一般商品</option>
+            <option value="slow">🐢 冷門商品</option>
+          </select>
           <button class="icon-btn" onclick="renderReorderTab()">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>重新整理
           </button>
@@ -401,6 +423,16 @@ tr.acc-row:hover{background:var(--surface2);}
 </div><!-- end app-screen -->
 
 <!-- Bulk Action Floating Bar -->
+<!-- Category Bulk Move Bar -->
+<div id="cat-bulk-bar" style="position:fixed;top:1rem;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;border-radius:16px;padding:10px 16px;display:none;align-items:center;gap:10px;box-shadow:0 4px 24px rgba(0,0,0,.35);z-index:998;flex-wrap:wrap;">
+  <span id="cat-bulk-count" style="font-size:14px;font-weight:600;">0 項已選</span>
+  <select id="cat-bulk-target" style="font-size:13px;padding:5px 10px;border-radius:8px;border:none;background:rgba(255,255,255,.2);color:#fff;cursor:pointer;max-width:160px;">
+    <option value="">移動至品類…</option>
+  </select>
+  <button onclick="bulkMoveCategory()" style="background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:99px;padding:6px 16px;font-size:13px;font-weight:600;cursor:pointer;">✓ 移動</button>
+  <button onclick="clearCatSelect()" style="background:rgba(255,255,255,.12);border:none;color:#fff;border-radius:99px;padding:6px 14px;font-size:13px;cursor:pointer;">取消</button>
+</div>
+
 <div id="bulk-bar" class="bulk-bar hidden" style="flex-wrap:wrap;border-radius:16px;padding:10px 16px;">
   <span id="bulk-count" style="font-size:14px;font-weight:600;margin-right:4px;">0 項已選</span>
   <select id="bulk-sup-select" style="font-size:13px;padding:5px 10px;border-radius:8px;border:none;background:rgba(255,255,255,.2);color:#fff;cursor:pointer;max-width:160px;">
@@ -577,7 +609,10 @@ async function loadAll(){
     }
     document.getElementById('loading').style.display='none';
     if(!inventoryData.length){document.getElementById('empty-state').style.display='block';}
-    else{document.getElementById('main-content').style.display='block';rerender();}
+    else{
+      document.getElementById('main-content').style.display='block';
+      const tog=document.getElementById('inv-view-toggle');
+      if(tog)tog.style.display='flex';rerender();}
   }catch(e){
     document.getElementById('loading').innerHTML='<span style="color:var(--danger)">載入失敗，請重新整理</span>';
   }finally{
@@ -985,30 +1020,54 @@ function rerender(){
     <div class="s-card s-danger"><div class="s-num danger">${crit}</div><div class="s-label">危急（庫存 = 0）</div></div>
     <div class="s-card s-warning"><div class="s-num warning">${low}</div><div class="s-label">低庫存（需補貨）</div></div>
     <div class="s-card s-ok"><div class="s-num ok">${ok}</div><div class="s-label">庫存充足</div></div>
+    <div class="s-card" style="border-color:#dc262644;background:var(--danger-bg,#fef2f2);cursor:pointer;" onclick="setPageTab('reorder');document.getElementById('reorder-tier-filter').value='hot';renderReorderTab();">
+      <div class="s-num" style="color:#dc2626;">${inventoryData.filter(r=>!archivedSet.has((r.product_name||'').trim())&&!isExcluded((r.product_name||'').trim())&&(()=>{const s=getSalesInfo((r.product_name||'').trim());return s&&s.tier==='hot'&&(parseFloat(r.quantity)||0)<=s.th;})()).length}</div>
+      <div class="s-label">🔥 熱銷需補貨</div>
+    </div>
   `;
 
   const allSups=[...supplierRules,{supplier_id:'uncat',name:'未分類',brands:''}];
   const activeSups=allSups.filter(s=>(supData[s.supplier_id]?.main.length+supData[s.supplier_id]?.acc.length)>0);
   const allAlert=crit+low>0;
 
+  function shortName(n){return n.replace(/[（(（][^)）)]*[)）)]/g,'').trim();}
+  function brandHint(s){const m=s.name.match(/[（(（]([^)）)]+)[)）)]/);return s.brands||(m?m[1]:'');}
+
   document.getElementById('sup-tabs').innerHTML=
-    `<button class="sup-tab${activeTab==='all'?' active':''}" onclick="setTab('all')">
-      ${allAlert&&activeTab!=='all'?'<span class="alert-dot"></span>':''}全部<span class="tab-count">${total}</span>
-    </button>`+
+    `<div class="sup-tab-wrap">
+      <button class="sup-tab${activeTab==='all'?' active':''}" onclick="setTab('all')">
+        <div class="sup-tab-meta">
+          ${allAlert&&activeTab!=='all'?'<span class="alert-dot"></span>':''}
+          <span class="sup-tab-name">全部</span>
+          <span class="tab-count">${total}</span>
+        </div>
+        <span class="sup-tab-brands">所有供應商</span>
+      </button>
+    </div>`+
     activeSups.map(s=>{
       const d=supData[s.supplier_id];
       const cnt=d.main.length+d.acc.length;
       const hasAlert=d.crit+d.low>0;
+      const critCnt=d.crit;
       const isUncat=s.supplier_id==='uncat';
+      const sname=shortName(s.name);
+      const brands=brandHint(s);
+      const redBadge=critCnt>0?`<span style="font-size:10px;font-weight:700;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;border-radius:99px;padding:1px 5px;flex-shrink:0;">${critCnt}</span>`:'';
       return `<div class="sup-tab-wrap">
         <button class="sup-tab${activeTab===s.supplier_id?' active':''}" onclick="setTab('${s.supplier_id}')"
           draggable="${isUncat?'false':'true'}"
           ondragstart="onTabDragStart(event,'${s.supplier_id}')" ondragend="onTabDragEnd(event)"
           ondragover="onTabDragOver(event,'${s.supplier_id}')" ondragleave="onTabDragLeave(event)"
           ondrop="onTabDrop(event,'${s.supplier_id}')">
-          ${hasAlert&&activeTab!==s.supplier_id?'<span class="alert-dot"></span>':''}${esc(s.name)}<span class="tab-count">${cnt}</span>
+          <div class="sup-tab-meta">
+            ${hasAlert&&activeTab!==s.supplier_id?'<span class="alert-dot"></span>':''}
+            <span class="sup-tab-name">${esc(sname)}</span>
+            ${redBadge}
+            <span class="tab-count">${cnt}</span>
+          </div>
+          ${brands?`<span class="sup-tab-brands">${esc(brands)}</span>`:''}
         </button>
-        ${!isUncat?`<span class="tab-rename-btn" onclick="renameSupplier('${s.supplier_id}')" title="重新命名">✎</span>`:''}
+        ${!isUncat?`<span class="tab-rename-btn" onclick="openEditSupModal('${s.supplier_id}')" title="編輯">✎</span>`:''}
       </div>`;
     }).join('');
 
@@ -1058,6 +1117,1016 @@ function rerender(){
       </table></div>
     </div>`;
   }).join('');
+}
+
+// ── Sales Velocity Data (6-month, auto-generated) ─────────────
+const SALES_DATA = {
+  "4G網卡 H762":{"u":427,"t":"hot","th":10},
+  "WiFi延伸器 WR188 5G (4天線)":{"u":371,"t":"hot","th":15},
+  "4G室外全向天線 SMA-5m":{"u":299,"t":"hot","th":15},
+  "電話耳麥 Addasound Crystal 2700 (DN1003)":{"u":294,"t":"hot","th":10},
+  "電話耳麥 VT200D RJ9":{"u":287,"t":"hot","th":10},
+  "WiFi延伸器 WR188 2.4G (6天線)":{"u":285,"t":"hot","th":15},
+  "電話耳麥 VT200 RJ9 (單耳)":{"u":269,"t":"hot","th":10},
+  "IP電話機 X303P w/o Adapter":{"u":268,"t":"hot","th":10},
+  "天線延長線 SMA-5m Ext":{"u":242,"t":"hot","th":15},
+  "5G/4G長根天線 18dBi SMA-3m":{"u":197,"t":"hot","th":15},
+  "電話耳麥 V201T 升級版 RJ9 (單耳)":{"u":193,"t":"hot","th":10},
+  "IP電話機 X303P":{"u":191,"t":"hot","th":10},
+  "WiFi延伸器 WR188 2.4G (4天線)":{"u":187,"t":"hot","th":15},
+  "4G工業路由器 LT228 (鐵殼)":{"u":186,"t":"hot","th":10},
+  "IP電話機 X301P":{"u":184,"t":"hot","th":10},
+  "5G/4G黑色小天線 8dBi-Ant Black(一組2入)-入2出3":{"u":174,"t":"hot","th":15},
+  "電話耳麥 Addasound Crystal 2700 麥克風罩":{"u":166,"t":"hot","th":15},
+  "電話耳麥 VT200D RJ9 無調音":{"u":140,"t":"hot","th":10},
+  "緊急按鈕 DJS-995":{"u":127,"t":"hot","th":10},
+  "4G分享器 B628":{"u":126,"t":"hot","th":10},
+  "電話耳麥 VT200 (單耳) 單接頭 (手機/平板)":{"u":125,"t":"hot","th":15},
+  "5G行動分享器 U30 Air (W)":{"u":120,"t":"hot","th":10},
+  "5G/4G白色小天線 8dBi-Ant White-(1組2入)入2出3":{"u":111,"t":"hot","th":15},
+  "4G網卡 E3372h-607":{"u":99,"t":"hot","th":8},
+  "4G平板天線 88dBi SMA-3m":{"u":99,"t":"hot","th":10},
+  "4G行動分享器電池 ZTE 4500mAh 電池-入2出3":{"u":97,"t":"hot","th":10},
+  "電話耳麥 DR10-200 RJ9 (雙耳)":{"u":97,"t":"hot","th":8},
+  "4G行動分享器電池 HB434666RBC 1500mah-入2出3":{"u":94,"t":"hot","th":10},
+  "IP電話機 X301P w/o Adapter":{"u":90,"t":"hot","th":8},
+  "4G分享器 B715s-23c":{"u":89,"t":"hot","th":8},
+  "耳麥耳罩 VT200D 耳罩(1組2入)-入2出3":{"u":88,"t":"hot","th":8},
+  "天線延長線 SMA-10m Ext":{"u":88,"t":"hot","th":10},
+  "5G分享器 F50":{"u":85,"t":"hot","th":8},
+  "5G底座天線 SMA-3m Black":{"u":81,"t":"hot","th":10},
+  "4G網卡 MF79U":{"u":80,"t":"hot","th":8},
+  "電話耳麥 VT200D 雙接頭":{"u":79,"t":"hot","th":10},
+  "4G行動分享器電池 HB824666RBC 3000mah-入2出3":{"u":79,"t":"hot","th":10},
+  "4G分享器 B315s-22":{"u":79,"t":"hot","th":8},
+  "IP電話機 X303G":{"u":77,"t":"hot","th":8},
+  "電話耳麥 Addasound Crystal 2700 (DN1001)":{"u":70,"t":"hot","th":8},
+  "4G分享器 RTL0080 (含天線) (含變壓器)":{"u":70,"t":"hot","th":10},
+  "耳麥電話線 DN1003 (Cisco)-入2出3":{"u":70,"t":"hot","th":10},
+  "WiFi 5G延伸器 ME30":{"u":68,"t":"hot","th":8},
+  "電話耳麥 Addasound Crystal 2700 麥克風罩-(1組2入)入2出3":{"u":66,"t":"hot","th":10},
+  "4G分享器 LT260":{"u":65,"t":"hot","th":8},
+  "IP轉換器 HT813":{"u":64,"t":"hot","th":8},
+  "WiFi延伸器 MW300RE":{"u":64,"t":"hot","th":8},
+  "4G工業路由器 H927 Pro":{"u":63,"t":"hot","th":8},
+  "IP電話機 WP826":{"u":62,"t":"hot","th":8},
+  "電話耳麥 Addasound Crystal 2700":{"u":62,"t":"hot","th":8},
+  "電話耳麥 Addasound Crystal 2700 耳罩 (含卡扣) (1組2入)-入2出3":{"u":62,"t":"hot","th":8},
+  "電話耳麥 VT200 (單耳) USB":{"u":62,"t":"hot","th":8},
+  "電話耳麥 Addasound Crystal 2700 耳罩(1組2入)-入2出3":{"u":61,"t":"hot","th":8},
+  "電話耳麥 Addasound Crystal 2700 耳罩卡扣 (1組2入)-入2出3":{"u":61,"t":"hot","th":8},
+  "電話耳麥 DR10-100 RJ9 (單耳)":{"u":60,"t":"hot","th":8},
+  "4G行動分享器 U10S Pro":{"u":58,"t":"hot","th":8},
+  "IP電話機 X301G w/o Adapter":{"u":55,"t":"hot","th":8},
+  "5G室外全向天線 TS9-3m Black":{"u":51,"t":"hot","th":10},
+  "電話耳麥 VT200 (單耳) 雙接頭":{"u":51,"t":"hot","th":10},
+  "4G分享器 B628-265":{"u":51,"t":"hot","th":8},
+  "5G行動分享器 MU5001 (含充電器)":{"u":47,"t":"active","th":5},
+  "ASUS WiFi 天線 Red(1組2入)-入2出3":{"u":46,"t":"active","th":8},
+  "5G分享器 NR5103":{"u":44,"t":"active","th":5},
+  "5G分享器 H138-380":{"u":42,"t":"active","th":5},
+  "4G網卡 E8372h-155":{"u":42,"t":"active","th":5},
+  "4G分享器 LT300":{"u":41,"t":"active","th":5},
+  "耳掛式耳麥 XD900 RJ9":{"u":41,"t":"active","th":5},
+  "耳麥耳罩 VT200D 麥克風罩-入2出3":{"u":40,"t":"active","th":8},
+  "網路攝影機 Spedal 920 Pro (含支架)":{"u":40,"t":"active","th":5},
+  "IP電話機 GRP2602P":{"u":40,"t":"active","th":5},
+  "4G分享器 B818-263":{"u":39,"t":"active","th":5},
+  "4G網卡 H762 (含轉卡)":{"u":36,"t":"active","th":5},
+  "電腦耳機 SHP9500":{"u":36,"t":"active","th":5},
+  "IP電話機 GRP2602W":{"u":35,"t":"active","th":5},
+  "IP電話機 X301W":{"u":35,"t":"active","th":5},
+  "4G分享器 MF296R":{"u":34,"t":"active","th":5},
+  "4G分享器 B535-232":{"u":33,"t":"active","th":5},
+  "IP電話機 V50P":{"u":32,"t":"active","th":5},
+  "IP電話機 T31":{"u":31,"t":"active","th":5},
+  "4G分享器 CPE903":{"u":30,"t":"active","th":5},
+  "4G行動分享器 E5573s":{"u":29,"t":"active","th":5},
+  "電話耳麥 DR10-100 RJ9 無調音 (單耳)":{"u":28,"t":"active","th":5},
+  "4G行動分享器 E5785":{"u":28,"t":"active","th":5},
+  "4G分享器 HH40L":{"u":28,"t":"active","th":5},
+  "4G分享器 MF293N":{"u":28,"t":"active","th":5},
+  "電話壁掛架子 WB108":{"u":27,"t":"active","th":5},
+  "5G分享器 H122-373":{"u":27,"t":"active","th":5},
+  "IP電話機 X303":{"u":27,"t":"active","th":5},
+  "電話耳麥 Addasound Crystal 2731 耳罩(1組2入)-入2出3":{"u":27,"t":"active","th":5},
+  "電話耳麥 VT200D 單接頭 (手機/平板)":{"u":26,"t":"active","th":8},
+  "變壓器 Fanvil 5V Adapter 入2出3":{"u":25,"t":"active","th":5},
+  "耳麥耳罩 DR10 耳罩(1組 2入)-入2出3":{"u":24,"t":"active","th":5},
+  "電話耳麥 VT200 RJ9 (單耳) 無調音":{"u":24,"t":"active","th":5},
+  "電話耳麥 Jabra Biz 2300":{"u":24,"t":"active","th":5},
+  "4G分享器 G403C":{"u":22,"t":"active","th":5},
+  "5G分享器 NR5103e":{"u":21,"t":"active","th":5},
+  "電話耳麥 Benertech A720":{"u":21,"t":"active","th":5},
+  "4G分享器 MF253":{"u":20,"t":"active","th":5},
+  "電話耳麥 DR10-200 3.5mm雙接頭 (雙耳)":{"u":20,"t":"active","th":8},
+  "IP電話機 T31P":{"u":20,"t":"active","th":5},
+  "IP電話機 X3U Pro w/o Adapter":{"u":20,"t":"active","th":5},
+  "耳麥轉接頭 3.5mm轉RJ9 (單插頭)--入2出3":{"u":19,"t":"active","th":5},
+  "IP電話機 T30P":{"u":19,"t":"active","th":5},
+  "IP電話機 V61W":{"u":19,"t":"active","th":5},
+  "電腦耳麥 DX-132":{"u":18,"t":"active","th":5},
+  "電話耳麥 DR10-200 3.5mm單接頭 (雙耳)":{"u":18,"t":"active","th":5},
+  "IP電話機 GRP2602":{"u":17,"t":"active","th":5},
+  "4G分享器 B311As-853":{"u":17,"t":"active","th":5},
+  "4G分享器 B310as-852":{"u":17,"t":"active","th":5},
+  "耳麥電話線 DN1001-入2出3":{"u":16,"t":"active","th":5},
+  "4G分享器 LT289":{"u":16,"t":"active","th":5},
+  "IP電話機 GXP1620/1625":{"u":15,"t":"active","th":5},
+  "電話耳麥 V202T 升級版 RJ9 (雙耳)":{"u":15,"t":"active","th":5},
+  "4G分享器 B320-323":{"u":15,"t":"active","th":5},
+  "耳麥轉接盒 Jabra Link 860":{"u":15,"t":"active","th":5},
+  "WiFi 7分享器 WR3600":{"u":14,"t":"active","th":5},
+  "4G工業路由器 LT228-EU (鐵殼)":{"u":14,"t":"active","th":5},
+  "5G行動分享器 U50 Pro":{"u":14,"t":"active","th":5},
+  "電話耳麥 DR10-100 3.5mm單接頭 (單耳)":{"u":13,"t":"active","th":5},
+  "4G分享器 K12":{"u":13,"t":"active","th":5},
+  "4G網卡 E8372h-608":{"u":13,"t":"active","th":5},
+  "ASUS WiFi 天線 Black(1組2入)-入2出3":{"u":13,"t":"active","th":5},
+  "轉接頭-入2出3":{"u":12,"t":"active","th":5},
+  "IP電話機 W620W":{"u":12,"t":"active","th":5},
+  "耳麥轉接頭 3.5mm轉RJ9 (雙插頭) --入2出3":{"u":12,"t":"active","th":5},
+  "4G行動分享器電池 ZTE 3000mAh 電池-入2出3":{"u":12,"t":"active","th":5},
+  "IP電話機 X3SP w/o Adapter":{"u":12,"t":"active","th":5},
+  "電話耳麥 DR10-200 RJ9 無調音 (雙耳)":{"u":12,"t":"active","th":5},
+  "4G分享器 CPE905":{"u":11,"t":"active","th":5},
+  "4G分享器 B535-636":{"u":11,"t":"active","th":5},
+  "電話耳麥 Addasound Crystal 2831 (DN1003)":{"u":10,"t":"active","th":5},
+  "電腦耳麥線 QD to USB Cord-入2出3":{"u":10,"t":"active","th":5},
+  "電話耳麥 Addasound Crystal 2700 (DN1021)":{"u":10,"t":"active","th":5},
+  "IP電話機 V62W":{"u":10,"t":"active","th":5},
+  "培訓耳麥線 QD to 2 x QD Cord-入2出3":{"u":10,"t":"active","th":5},
+  "視訊對講機 C600":{"u":9,"t":"slow","th":3},
+  "電話耳麥 VT200D USB":{"u":9,"t":"slow","th":3},
+  "4G分享器 B535-333":{"u":9,"t":"slow","th":3},
+  "4G行動分享器 DWR-932W":{"u":9,"t":"slow","th":3},
+  "IP電話機 GRP2601":{"u":9,"t":"slow","th":3},
+  "IP電話機 GXP1610/1615":{"u":9,"t":"slow","th":3},
+  "IP對講機 A10":{"u":9,"t":"slow","th":3},
+  "IP電話機 X303W":{"u":8,"t":"slow","th":3},
+  "5G分享器 F50 (含轉卡)":{"u":8,"t":"slow","th":3},
+  "5G行動分享器 U60 Pro":{"u":8,"t":"slow","th":3},
+  "IP轉換器 HT801":{"u":8,"t":"slow","th":3},
+  "電話耳麥 DR10-100 3.5mm雙接頭 (單耳)":{"u":8,"t":"slow","th":3},
+  "4G分享器 LT261":{"u":8,"t":"slow","th":3},
+  "4G分享器 CPE101":{"u":8,"t":"slow","th":3},
+  "4G分享器 B715s-23c (含轉卡)":{"u":7,"t":"slow","th":3},
+  "IP電話機 V60P":{"u":7,"t":"slow","th":3},
+  "耳掛式耳麥 XD900 3.5mm 單插頭":{"u":7,"t":"slow","th":3},
+  "4G網卡 DWM-222W":{"u":7,"t":"slow","th":3},
+  "變壓器 12V1A Adapter-入2出3":{"u":7,"t":"slow","th":3},
+  "5G網卡 IK512":{"u":7,"t":"slow","th":3},
+  "5G分享器 5G-NR600":{"u":7,"t":"slow","th":3},
+  "5G分享器 MC801A":{"u":7,"t":"slow","th":3},
+  "電話耳機轉接頭 RJ9 Adapter-入2出3":{"u":6,"t":"slow","th":3},
+  "5G分享器 G530":{"u":6,"t":"slow","th":3},
+  "4G分享器 K12 電池":{"u":6,"t":"slow","th":3},
+  "電話耳麥 DR10-100 無調音 3.5mm單接頭 (單耳)":{"u":6,"t":"slow","th":3},
+  "耳麥電話線 GN1200-入2出3":{"u":6,"t":"slow","th":3},
+  "IP電話機 T29G":{"u":6,"t":"slow","th":3},
+  "雙頻5G WiFi延伸器 RE315":{"u":6,"t":"slow","th":3},
+  "4G分享器 LT210F":{"u":5,"t":"slow","th":3},
+  "電話耳麥 Addasound Crystal 2731 耳罩 - 副廠(1組2入)-入2出3":{"u":5,"t":"slow","th":3},
+  "5G行動分享器 MU5001":{"u":5,"t":"slow","th":3},
+  "5G分享器 NR5103e V2":{"u":5,"t":"slow","th":3},
+  "IP電話機 X3SP":{"u":5,"t":"slow","th":3},
+  "IP電話機 T34W":{"u":5,"t":"slow","th":3},
+  "4G行動分享器 DWR-932W ":{"u":5,"t":"slow","th":3},
+  "IP電話轉換器 HT812":{"u":5,"t":"slow","th":3},
+  "WiFi 6延伸器 ME60X":{"u":5,"t":"slow","th":3},
+  "電話耳麥 Addasound Crystal 2831 耳罩(1組2入)-入2出3":{"u":4,"t":"slow","th":3},
+  "耳麥電話線 DN1011 (USB)-入2出3":{"u":4,"t":"slow","th":3},
+  "4G分享器 B525s-23a":{"u":4,"t":"slow","th":3},
+  "4G網卡 E3372h-607 (含轉卡)":{"u":4,"t":"slow","th":3},
+  "無線網卡 AX18U":{"u":4,"t":"slow","th":3},
+  "網路交換機 UCX100 1O1S":{"u":4,"t":"slow","th":3},
+  "4G分享器 RTL0080":{"u":4,"t":"slow","th":3},
+  "4G分享器 LT289 (含轉卡)":{"u":4,"t":"slow","th":3},
+  "4G分享器 B628 (含天線) (含轉卡)":{"u":4,"t":"slow","th":3},
+  "MU5001 電池":{"u":4,"t":"slow","th":3},
+  "4G分享器 MT110":{"u":4,"t":"slow","th":3},
+  "4G分享器 RTL0080 (含轉卡)":{"u":4,"t":"slow","th":3},
+  "4G行動分享器 MF985T (含充電器)":{"u":4,"t":"slow","th":3},
+  "IP電話機 X301":{"u":4,"t":"slow","th":3},
+  "IP電話機 X3SP 聽筒":{"u":4,"t":"slow","th":3},
+  "IP電話機 FIP16+":{"u":4,"t":"slow","th":3},
+  "5G/4G黑色天線 AZ7795G(一組2支)入2出3":{"u":4,"t":"slow","th":3},
+  "IP電話機 WP810":{"u":3,"t":"slow","th":3},
+  "IP電話機 V50G":{"u":3,"t":"slow","th":3},
+  "IP電話機 X3U Pro":{"u":3,"t":"slow","th":3},
+  "4G網卡 E8372h-608 (含轉卡)":{"u":3,"t":"slow","th":3},
+  "4G網卡 MF297D":{"u":3,"t":"slow","th":3},
+  "4G網卡 MF79U (含轉卡)":{"u":3,"t":"slow","th":3},
+  "IP對講機 i10sv":{"u":3,"t":"slow","th":3},
+  "4G行動分享器 E5785 無電池":{"u":3,"t":"slow","th":3},
+  "IP電話耳麥 YHS34":{"u":3,"t":"slow","th":3},
+  "5G行動分享器 U30 Air (G)灰色":{"u":3,"t":"slow","th":3},
+  "4G分享器 B525s-65a (B)":{"u":3,"t":"slow","th":3},
+  "4G分享器 B535 底座-入2出3":{"u":3,"t":"slow","th":3},
+  "5G行動分享器 U30 Pro":{"u":3,"t":"slow","th":3},
+  "電話耳麥 Addasound Crystal 2732 (DN1001)":{"u":3,"t":"slow","th":3},
+  "4G分享器 K12 (含電池) (含轉卡)":{"u":3,"t":"slow","th":3},
+  "5G分享器 NR5103 (含轉卡) (含天線)":{"u":3,"t":"slow","th":3},
+  "IP轉換器 DAG1000 4 FXO":{"u":3,"t":"slow","th":3},
+  "4G分享器 B320-323 (含轉卡)":{"u":3,"t":"slow","th":3},
+  "4G分享器 MB115-4G":{"u":3,"t":"slow","th":3},
+  "4G分享器 MF296R (含轉卡)":{"u":3,"t":"slow","th":3},
+  "電話耳麥 Jabra Biz 2300 Duo (QD to RJ9)":{"u":2,"t":"slow","th":3},
+  "4G分享器 B818-263 (含轉卡)":{"u":2,"t":"slow","th":3},
+  "4G分享器 B315s-22 (含轉卡)":{"u":2,"t":"slow","th":3},
+  "4G分享器 4G分享器 B628-265 (含天線) (含轉卡)":{"u":2,"t":"slow","th":3},
+  "4G分享器 B525s":{"u":2,"t":"slow","th":3},
+  "電話耳麥 MRD308":{"u":2,"t":"slow","th":3},
+  "變壓器 Grandstream 5V Adapter":{"u":2,"t":"slow","th":3},
+  "4G分享器 B528s-23a":{"u":2,"t":"slow","th":3},
+  "4G分享器 B535 無底座 (含轉卡)":{"u":2,"t":"slow","th":3},
+  "4G網卡 E8372h-155 (含轉卡)":{"u":2,"t":"slow","th":3},
+  "4G室外全向天線 固定架-入2出3":{"u":2,"t":"slow","th":3},
+  "耳麥線 Jabra Biz 2300 RJ9線-入2出3":{"u":2,"t":"slow","th":3},
+  "變壓器 RTL0080 12V Adapter-入2出3":{"u":2,"t":"slow","th":3},
+  "緊急呼叫器 DJS-SOS01":{"u":2,"t":"slow","th":3},
+  "4G工業路由器 LT228 (含轉卡)":{"u":2,"t":"slow","th":3},
+  "4G分享器 TL-TR903":{"u":2,"t":"slow","th":3},
+  "智能門鎖 Smart Lock (三合一)":{"u":2,"t":"slow","th":3},
+  "電話耳麥 DR10-100 USB (單耳)":{"u":2,"t":"slow","th":3},
+  "4G分享器 B628 (含天線)":{"u":2,"t":"slow","th":3},
+  "4G分享器 G416C":{"u":2,"t":"slow","th":3},
+  "4G分享器 B818-263 (含轉卡) (含天線)":{"u":2,"t":"slow","th":3},
+  "5G分享器 F50 Pro":{"u":2,"t":"slow","th":3},
+  "5G分享器 H138-380 (含轉卡)":{"u":2,"t":"slow","th":3},
+  "5G行動分享器 MU5002":{"u":2,"t":"slow","th":3},
+  "5G行動分享器 MU5001 無電池 (含充電器)":{"u":2,"t":"slow","th":3},
+  "IP電話機 T33G":{"u":2,"t":"slow","th":3},
+  "5G行動分享器 MU5001 含網口":{"u":2,"t":"slow","th":3},
+  "5G分享器 NR5103e (含天線)":{"u":2,"t":"slow","th":3},
+  "4G行動分享器 E5573s (含轉卡)":{"u":2,"t":"slow","th":3},
+  "4G行動分享器 E5785 (含轉卡) (含電池)":{"u":2,"t":"slow","th":3},
+  "4G行動分享器 DWR-932C(G)":{"u":2,"t":"slow","th":3},
+  "5G行動分享器 MU5001 (含充電器) 無電池":{"u":2,"t":"slow","th":3},
+  "5G分享器 H155-380":{"u":2,"t":"slow","th":3},
+  "5G底座天線 SMA-3m Black (含SMA內針轉接頭)":{"u":2,"t":"slow","th":3},
+  "耳掛式耳麥 XD900 3.5mm 雙插頭":{"u":2,"t":"slow","th":3},
+  "錄音器 VTR5010 Pro 32GB":{"u":2,"t":"slow","th":3},
+  "IP電話轉換器 HT813":{"u":2,"t":"slow","th":3},
+  "IP對講機 H501":{"u":1,"t":"dead","th":2},
+  "5G行動分享器 U30 Air (W) (含轉卡) (含電池)":{"u":1,"t":"dead","th":2},
+  "5G行動分享器 U30 Air (W) (含轉卡)":{"u":1,"t":"dead","th":2},
+  "電話耳麥 DR10-100 Type-C (單耳)":{"u":1,"t":"dead","th":2},
+  "D501 5G網卡":{"u":1,"t":"dead","th":2},
+  "電話耳麥 Addasound Crystal 2731 (DN1001)":{"u":1,"t":"dead","th":2},
+  "4G分享器 G416C 福利品":{"u":1,"t":"dead","th":2},
+  "4G分享器 LT260 (含轉卡)":{"u":1,"t":"dead","th":2},
+  "4G分享器 FWA505":{"u":1,"t":"dead","th":2},
+  "4G分享器 G403C (含轉卡)":{"u":1,"t":"dead","th":2},
+  "電話耳機線 Benertech RJ9 QD Cord (Cisco)":{"u":1,"t":"dead","th":2},
+  "4G分享器 B535-232 (含轉卡)":{"u":1,"t":"dead","th":2},
+  "電話耳麥 Jabra Biz 2300 (QD to RJ9)":{"u":1,"t":"dead","th":2},
+  "IP對講機 i10s":{"u":1,"t":"dead","th":2},
+  "IP對講機 i10":{"u":1,"t":"dead","th":2},
+  "5G分享器 NR5103 (含天線)":{"u":1,"t":"dead","th":2},
+  "5G分享器 HH512":{"u":1,"t":"dead","th":2},
+  "IP電話機 GXP2135":{"u":1,"t":"dead","th":2},
+  "IP電話機 A20W":{"u":1,"t":"dead","th":2},
+  "5G分享器 5G-NR600 (含轉卡)":{"u":1,"t":"dead","th":2},
+  "IP轉換器 HT814":{"u":1,"t":"dead","th":2},
+  "IP電話機 V60W":{"u":1,"t":"dead","th":2},
+  "IP電話機 V66":{"u":1,"t":"dead","th":2},
+  "IP電話機 TAIP108":{"u":1,"t":"dead","th":2},
+  "IP電話機 H6W":{"u":1,"t":"dead","th":2},
+  "5G分享器 NX200":{"u":1,"t":"dead","th":2},
+  "5G行動分享器 MU5001 (含充電器/天線/電池)":{"u":1,"t":"dead","th":2},
+  "5G行動分享器 MU5001 (含充電器/天線/轉卡/電池)":{"u":1,"t":"dead","th":2},
+  "5G行動分享器 U30 Air (G)":{"u":1,"t":"dead","th":2},
+  "4G行動分享器 M7450":{"u":1,"t":"dead","th":2},
+  "4G行動分享器 M7200":{"u":1,"t":"dead","th":2},
+  "4G行動分享器電池 ZTE 3000mAh 電池":{"u":1,"t":"dead","th":2},
+  "4G行動分享器 E5788-96u":{"u":1,"t":"dead","th":2},
+  "IP電話機 X1SP w/o Adapter":{"u":1,"t":"dead","th":2},
+  "IP電話機 X3S":{"u":1,"t":"dead","th":2},
+  "IP電話機 X4":{"u":1,"t":"dead","th":2},
+  "IP電話機 X7C":{"u":1,"t":"dead","th":2},
+  "IP電話轉換器 HT841":{"u":1,"t":"dead","th":2},
+  "網路交換機 OM20G 2O2S":{"u":1,"t":"dead","th":2},
+  "無線門鈴 DJS-DR95":{"u":1,"t":"dead","th":2},
+  "網路交換機 UCM6302A":{"u":1,"t":"dead","th":2},
+  "網路交換機 UCX100 2O":{"u":1,"t":"dead","th":2},
+  "網路交換機 UCX200 2O":{"u":1,"t":"dead","th":2},
+  "網路交換機 UCX200 Pro 4O":{"u":1,"t":"dead","th":2},
+  "4G工業路由器 LT228 (含轉接卡)":{"u":1,"t":"dead","th":2},
+  "4G工業路由器 LT228":{"u":1,"t":"dead","th":2},
+  "4G分享器 RTL0080 (含轉卡) (含變壓器)":{"u":1,"t":"dead","th":2},
+  "4G分享器 TL-MR100":{"u":1,"t":"dead","th":2},
+  "4G分享器 MB110-4G V2":{"u":1,"t":"dead","th":2},
+  "4G分享器 LT300 (含轉卡)":{"u":1,"t":"dead","th":2},
+  "4G分享器 Optus Ultra 4G Gen2":{"u":1,"t":"dead","th":2},
+  "耳麥電話線 DN1002 (Avaya)-入2出3":{"u":1,"t":"dead","th":2},
+  "錄音器 VTR5102 16GB":{"u":1,"t":"dead","th":2},
+  "耳麥電話線 DN1008 (Yealink)-入2出3":{"u":1,"t":"dead","th":2},
+  "4G平板天線 28dBi SMA-3m":{"u":1,"t":"dead","th":2},
+  "電話耳機線 Benertech RJ9 QD Cord":{"u":1,"t":"dead","th":2},
+  "4G分享器 B525s-65a (B) (含轉卡)":{"u":1,"t":"dead","th":2},
+  "電話耳麥 SP11":{"u":1,"t":"dead","th":2},
+  "4G分享器 B310as-852 (含轉卡)":{"u":1,"t":"dead","th":2},
+  "3.5mm單孔轉RJ9水 晶頭":{"u":1,"t":"dead","th":2},
+  "轉接卡 Noosy Adapter-入2出3":{"u":2318,"t":"freebie","th":20},
+  "4G黑色小天線 5dBi-Ant Black TS9(一組2支)入2出3":{"u":363,"t":"freebie","th":20},
+  "天線轉接頭 SMA轉TS9(一組2個)入2出3":{"u":173,"t":"freebie","th":20},
+  "天線轉接頭 SMA內螺內針轉外螺內針(1組2入)-入2出3":{"u":80,"t":"freebie","th":20},
+  "4G平板天線 35dBi SMA-3m":{"u":63,"t":"freebie","th":20},
+  "天線轉接頭 SMA轉CRC9(一組2個)入2出3":{"u":30,"t":"freebie","th":20},
+  "天線轉接頭 SMA內螺內孔轉外螺內孔(1組2入)--入2出3":{"u":24,"t":"freebie","th":20},
+  "4G白色小天線 5dBi-Ant White(一組2支)入2出3":{"u":20,"t":"freebie","th":20},
+  "4G黑色小天線 5dBi Ant Black 1組 (2入)":{"u":3,"t":"freebie","th":20},
+  "天線轉接頭 SMA內螺內針轉外螺內針":{"u":3,"t":"freebie","th":20},
+  "天線轉接頭 SMA轉TS9(一組2個)":{"u":1,"t":"freebie","th":20}
+};
+
+const TIER_LABEL = {'hot':'🔥 熱銷', 'active':'✅ 一般', 'slow':'🐢 冷門', 'dead':'💤 零銷', 'freebie':'🎁 贈品', 'unknown':'❓ 無資料'};
+const TIER_COLOR = {'hot':'#dc2626', 'active':'#16a34a', 'slow':'#b45309', 'dead':'#9ca3af', 'freebie':'#7c3aed', 'unknown':'#9ca3af'};
+
+function getSalesInfo(productName) {
+  return SALES_DATA[productName] || null;
+}
+
+// ── Product Categories ───────────────────────────────────────
+const PRODUCT_CATEGORIES = {
+  "5G分享器 5GEE QTAD52E":"5G路由器",
+  "5G分享器 5G-NR600":"5G路由器",
+  "5G分享器 5G-NR600 (含轉卡)":"5G路由器",
+  "5G分享器 5G-X28":"5G路由器",
+  "5G分享器 5GX-800":"5G路由器",
+  "5G分享器 F50":"5G路由器",
+  "5G分享器 F50 (含轉卡)":"5G路由器",
+  "5G分享器 F50 Pro":"5G路由器",
+  "5G分享器 G530":"5G路由器",
+  "5G分享器 H112-372":"5G路由器",
+  "5G分享器 H122-373":"5G路由器",
+  "5G分享器 H138-380":"5G路由器",
+  "5G分享器 H138-380 (含轉卡)":"5G路由器",
+  "5G分享器 H155-380":"5G路由器",
+  "5G分享器 HH512":"5G路由器",
+  "5G分享器 HTC 5G Hub":"5G路由器",
+  "5G分享器 MC801A":"5G路由器",
+  "5G分享器 MC801A (含天線) (含轉卡)":"5G路由器",
+  "5G分享器 MC888 Ultra":"5G路由器",
+  "5G分享器 NR5103":"5G路由器",
+  "5G分享器 NR5103 (含天線)":"5G路由器",
+  "5G分享器 NR5103 (含轉卡)":"5G路由器",
+  "5G分享器 NR5103 (含轉卡) (含天線)":"5G路由器",
+  "5G分享器 NR5103e":"5G路由器",
+  "5G分享器 NR5103e (含天線)":"5G路由器",
+  "5G分享器 NR5103e (含轉卡) (含天線)":"5G路由器",
+  "5G分享器 NR5103e V2":"5G路由器",
+  "5G分享器 NX200":"5G路由器",
+  "5G分享器 VN007+":"5G路由器",
+  "4G分享器 4G CPE":"4G路由器",
+  "4G分享器 4G-N16":"4G路由器",
+  "4G分享器 B3000 B593s-22":"4G路由器",
+  "4G分享器 B310as-852":"4G路由器",
+  "4G分享器 B310as-852 (含轉卡)":"4G路由器",
+  "4G分享器 B310s-22":"4G路由器",
+  "4G分享器 B310s-518":"4G路由器",
+  "4G分享器 B311-221":"4G路由器",
+  "4G分享器 B311As-853":"4G路由器",
+  "4G分享器 B311B-853":"4G路由器",
+  "4G分享器 B311s-220":"4G路由器",
+  "4G分享器 B312-926":"4G路由器",
+  "4G分享器 B315s-22":"4G路由器",
+  "4G分享器 B315s-22 (含轉卡)":"4G路由器",
+  "4G分享器 B315s-607":"4G路由器",
+  "4G分享器 B315s-608":"4G路由器",
+  "4G分享器 B316-855":"4G路由器",
+  "4G分享器 B320-323":"4G路由器",
+  "4G分享器 B320-323 (含轉卡)":"4G路由器",
+  "4G分享器 B525s":"4G路由器",
+  "4G分享器 B525s-23a":"4G路由器",
+  "4G分享器 B525s-23a Black":"4G路由器",
+  "4G分享器 B525s-23a White":"4G路由器",
+  "4G分享器 B525s-65a":"4G路由器",
+  "4G分享器 B525s-65a (B)":"4G路由器",
+  "4G分享器 B525s-65a (B) (含轉卡)":"4G路由器",
+  "4G分享器 B528":"4G路由器",
+  "4G分享器 B528 (含轉卡)":"4G路由器",
+  "4G分享器 B528s-23a":"4G路由器",
+  "4G分享器 B535":"4G路由器",
+  "4G分享器 B535 底座-入2出3":"4G路由器",
+  "4G分享器 B535 無底座 (含轉卡)":"4G路由器",
+  "4G分享器 B535-232":"4G路由器",
+  "4G分享器 B535-232 (含轉卡)":"4G路由器",
+  "4G分享器 B535-333":"4G路由器",
+  "4G分享器 B535-333 w/o phone":"4G路由器",
+  "4G分享器 B535-636":"4G路由器",
+  "4G分享器 B535-836":"4G路由器",
+  "4G分享器 B593s-22":"4G路由器",
+  "4G分享器 B593u-12":"4G路由器",
+  "4G分享器 B612":"4G路由器",
+  "4G分享器 B625-261":"4G路由器",
+  "4G分享器 B628":"4G路由器",
+  "4G分享器 B628 (含天線)":"4G路由器",
+  "4G分享器 B628 (含天線) (含轉卡)":"4G路由器",
+  "4G分享器 B628-265":"4G路由器",
+  "4G分享器 B628-265 (含天線) (含轉卡)":"4G路由器",
+  "4G分享器 B628s-265":"4G路由器",
+  "4G分享器 B715s-23c":"4G路由器",
+  "4G分享器 B715s-23c (含轉卡)":"4G路由器",
+  "4G分享器 B818-263":"4G路由器",
+  "4G分享器 B818-263 (含轉卡)":"4G路由器",
+  "4G分享器 B818-263 (含轉卡) (含天線)":"4G路由器",
+  "4G分享器 B900-230":"4G路由器",
+  "4G分享器 B920":"4G路由器",
+  "4G分享器 CPE101":"4G路由器",
+  "4G分享器 CPE102 4G PRO":"4G路由器",
+  "4G分享器 CPE903":"4G路由器",
+  "4G分享器 CPE905":"4G路由器",
+  "4G分享器 CPE905 (含轉接卡)":"4G路由器",
+  "4G分享器 DWR-921E":"4G路由器",
+  "4G分享器 E5172s":"4G路由器",
+  "4G分享器 E5180 EE":"4G路由器",
+  "4G分享器 E5180s-22":"4G路由器",
+  "4G分享器 E5186s-22":"4G路由器",
+  "4G分享器 E5186s-22a":"4G路由器",
+  "4G分享器 E5186s-61a":"4G路由器",
+  "Flybox 4G":"4G路由器",
+  "4G分享器 FWA505":"4G路由器",
+  "4G分享器 G403C":"4G路由器",
+  "4G分享器 G403C (含轉卡)":"4G路由器",
+  "4G分享器 G416C":"4G路由器",
+  "4G分享器 G416C 福利品":"4G路由器",
+  "4G分享器 H305":"4G路由器",
+  "4G分享器 HH40L":"4G路由器",
+  "4G分享器 HH40L (含轉卡)":"4G路由器",
+  "4G分享器 HH70VB":"4G路由器",
+  "4G分享器 K10":"4G路由器",
+  "4G分享器 K10 電池-入2出3":"4G路由器",
+  "4G分享器 K12":"4G路由器",
+  "4G分享器 K12 (含電池) (含轉卡)":"4G路由器",
+  "4G分享器 K12 電池":"4G路由器",
+  "4G分享器 LT210F":"4G路由器",
+  "4G分享器 LT210F (含轉卡)":"4G路由器",
+  "4G分享器 LT260":"4G路由器",
+  "4G分享器 LT260 (含轉卡)":"4G路由器",
+  "4G分享器 LT261":"4G路由器",
+  "4G分享器 LT280":"4G路由器",
+  "4G分享器 LT280+":"4G路由器",
+  "4G分享器 LT280V (語音版)":"4G路由器",
+  "4G分享器 LT281":"4G路由器",
+  "4G分享器 LT289":"4G路由器",
+  "4G分享器 LT289 (含轉卡)":"4G路由器",
+  "4G分享器 LT300":"4G路由器",
+  "4G分享器 LT300 (含轉卡)":"4G路由器",
+  "4G分享器 M1 AUS":"4G路由器",
+  "4G分享器 M1 EU":"4G路由器",
+  "4G分享器 M1 HK":"4G路由器",
+  "4G分享器 M2 AUS":"4G路由器",
+  "4G分享器 MB110-4G V2":"4G路由器",
+  "4G分享器 MB115-4G":"4G路由器",
+  "4G分享器 MF253":"4G路由器",
+  "4G分享器 MF253+":"4G路由器",
+  "4G分享器 MF253S":"4G路由器",
+  "4G分享器 MF283+":"4G路由器",
+  "4G分享器 MF283U":"4G路由器",
+  "4G分享器 MF283U 無電話":"4G路由器",
+  "4G分享器 MF286":"4G路由器",
+  "4G分享器 MF286 (含轉接卡)":"4G路由器",
+  "4G分享器 MF289D":"4G路由器",
+  "4G分享器 MF293N":"4G路由器",
+  "4G分享器 MF296R":"4G路由器",
+  "4G分享器 MF296R (含轉卡)":"4G路由器",
+  "4G分享器 MR200":"4G路由器",
+  "4G分享器 MR600":"4G路由器",
+  "4G分享器 MT110":"4G路由器",
+  "4G分享器 Optus Ultra 4G Gen2":"4G路由器",
+  "4G分享器 P1-F01":"4G路由器",
+  "4G分享器 RTL0080":"4G路由器",
+  "4G分享器 RTL0080 (含天線) (含變壓器)":"4G路由器",
+  "4G分享器 RTL0080 (含轉卡)":"4G路由器",
+  "4G分享器 RTL0080 (含轉卡) (含變壓器)":"4G路由器",
+  "4G分享器 TL-MR100":"4G路由器",
+  "4G分享器 TL-TR903":"4G路由器",
+  "4G分享器 X50-4G":"4G路由器",
+  "4G工業路由器 H927 Pro":"4G工業路由器",
+  "4G工業路由器 LT228":"4G工業路由器",
+  "4G工業路由器 LT228 (含轉卡)":"4G工業路由器",
+  "4G工業路由器 LT228 (含轉接卡)":"4G工業路由器",
+  "4G工業路由器 LT228 (鐵殼)":"4G工業路由器",
+  "4G工業路由器 LT228-EU (鐵殼)":"4G工業路由器",
+  "5G行動分享器 MU5001":"5G行動分享器",
+  "5G行動分享器 MU5001 (含充電器)":"5G行動分享器",
+  "5G行動分享器 MU5001 (含充電器) (含天線)":"5G行動分享器",
+  "5G行動分享器 MU5001 (含充電器) 無電池":"5G行動分享器",
+  "5G行動分享器 MU5001 (含充電器/天線/電池)":"5G行動分享器",
+  "5G行動分享器 MU5001 (含充電器/天線/轉卡/電池)":"5G行動分享器",
+  "5G行動分享器 MU5001 含天線 (含充電器)":"5G行動分享器",
+  "5G行動分享器 MU5001 含電池 (含充電器)":"5G行動分享器",
+  "5G行動分享器 MU5001 含電池 含天線 (含充電器)":"5G行動分享器",
+  "5G行動分享器 MU5001 含網口":"5G行動分享器",
+  "5G行動分享器 MU5001 含網口 (含轉接頭)":"5G行動分享器",
+  "5G行動分享器 MU5001 無電池 (含充電器)":"5G行動分享器",
+  "5G行動分享器 MU5001 無網口":"5G行動分享器",
+  "5G行動分享器 MU5001 無網口 (含轉接頭)":"5G行動分享器",
+  "5G行動分享器 MU5001 無網口 福利品 (含轉接頭)":"5G行動分享器",
+  "5G行動分享器 MU5001 無網口 福利品 (無轉接頭) (無電池)":"5G行動分享器",
+  "MU5001 電池":"5G行動分享器",
+  "5G行動分享器 MU5002":"5G行動分享器",
+  "5G行動分享器 MU5002 (含轉接頭)":"5G行動分享器",
+  "5G行動分享器 MU5002 福利品":"5G行動分享器",
+  "5G行動分享器 MU5002 福利品 (含轉接頭)":"5G行動分享器",
+  "5G行動分享器 U30 Air":"5G行動分享器",
+  "5G行動分享器 U30 Air (G)灰色":"5G行動分享器",
+  "5G行動分享器 U30 Air (W)":"5G行動分享器",
+  "5G行動分享器 U30 Air (W) (含轉卡)":"5G行動分享器",
+  "5G行動分享器 U30 Air (W) (含轉卡) (含電池)":"5G行動分享器",
+  "U30 Air 電池-入2出3":"5G行動分享器",
+  "5G行動分享器 U30 Pro":"5G行動分享器",
+  "5G行動分享器 U30 Pro (含轉卡)":"5G行動分享器",
+  "5G行動分享器 U50 Pro":"5G行動分享器",
+  "5G行動分享器 U60 Pro":"5G行動分享器",
+  "4G行動分享器 AC810s":"4G行動分享器",
+  "4G行動分享器 DWR-932C(G)":"4G行動分享器",
+  "4G行動分享器 DWR-932W":"4G行動分享器",
+  "4G行動分享器 E5573cs-320":"4G行動分享器",
+  "4G行動分享器 E5573cs-322":"4G行動分享器",
+  "4G行動分享器 E5573cs-606":"4G行動分享器",
+  "4G行動分享器 E5573cs-609":"4G行動分享器",
+  "4G行動分享器 E5573cs-609 w/o battery":"4G行動分享器",
+  "4G行動分享器 E5573s":"4G行動分享器",
+  "4G行動分享器 E5573s (含轉卡)":"4G行動分享器",
+  "4G行動分享器 E5573s (含轉接卡)":"4G行動分享器",
+  "4G行動分享器 E5573s w/o battery":"4G行動分享器",
+  "4G行動分享器 E5576-320":"4G行動分享器",
+  "4G行動分享器 E5577cs-321":"4G行動分享器",
+  "4G行動分享器 E5785":"4G行動分享器",
+  "4G行動分享器 E5785 (含轉卡) (含電池)":"4G行動分享器",
+  "4G行動分享器 E5785 (含轉卡) (含轉接頭)":"4G行動分享器",
+  "4G行動分享器 E5785 (含轉接頭)":"4G行動分享器",
+  "4G行動分享器 E5785 w/o battery":"4G行動分享器",
+  "4G行動分享器 E5785 無電池":"4G行動分享器",
+  "4G行動分享器 E5786s-63a":"4G行動分享器",
+  "4G行動分享器 E5787Ph-67a":"4G行動分享器",
+  "4G行動分享器 E5787Ph-67a OEM":"4G行動分享器",
+  "4G行動分享器 E5787Ph-67a 無電池":"4G行動分享器",
+  "4G行動分享器 E5788-96u":"4G行動分享器",
+  "4G行動分享器 E6878h-370 8000mAh":"4G行動分享器",
+  "4G行動分享器 Glocalme G3":"4G行動分享器",
+  "4G行動分享器電池 HB434666RBC 1500mah-入2出3":"4G行動分享器",
+  "4G行動分享器電池 HB824666RBC 3000mah-入2出3":"4G行動分享器",
+  "4G行動分享器電池 Li3730T42P3H6544A2 3000mah":"4G行動分享器",
+  "4G行動分享器 M7200":"4G行動分享器",
+  "4G行動分享器 M7450":"4G行動分享器",
+  "4G行動分享器 MF937":"4G行動分享器",
+  "4G行動分享器 MF985T":"4G行動分享器",
+  "4G行動分享器 MF985T (含充電器)":"4G行動分享器",
+  "4G行動分享器 MF985T (含轉接卡)":"4G行動分享器",
+  "4G行動分享器電池 Netgear W7":"4G行動分享器",
+  "4G行動分享器 Nubia WD670":"4G行動分享器",
+  "4G行動分享器 U10S Pro":"4G行動分享器",
+  "4G行動分享器 U10S Pro (含電池)":"4G行動分享器",
+  "4G行動分享器 U10S Pro (含轉卡)":"4G行動分享器",
+  "4G行動分享器 U10S Pro 無電池":"4G行動分享器",
+  "4G行動分享器電池 ZTE 3000mAh 電池-入2出3":"4G行動分享器",
+  "4G行動分享器電池 ZTE 4500mAh 電池-入2出3":"4G行動分享器",
+  "無線網卡 AX18U":"5G/4G USB網卡",
+  "D501 5G網卡":"5G/4G USB網卡",
+  "4G網卡 DWM-222W":"5G/4G USB網卡",
+  "4G網卡 E3372-325":"5G/4G USB網卡",
+  "4G網卡 E3372h Airtel":"5G/4G USB網卡",
+  "4G網卡 E3372h-320":"5G/4G USB網卡",
+  "4G網卡 E3372h-607":"5G/4G USB網卡",
+  "4G網卡 E3372h-607 (含轉卡)":"5G/4G USB網卡",
+  "4G網卡 E8372h-153":"5G/4G USB網卡",
+  "4G網卡 E8372h-155":"5G/4G USB網卡",
+  "4G網卡 E8372h-155 (含轉卡)":"5G/4G USB網卡",
+  "4G網卡 E8372h-320":"5G/4G USB網卡",
+  "4G網卡 E8372h-607":"5G/4G USB網卡",
+  "4G網卡 E8372h-608":"5G/4G USB網卡",
+  "4G網卡 E8372h-608 (含轉卡)":"5G/4G USB網卡",
+  "4G網卡 H760-9":"5G/4G USB網卡",
+  "4G網卡 H762":"5G/4G USB網卡",
+  "4G網卡 H762 (含轉卡)":"5G/4G USB網卡",
+  "4G網卡 H762 (含轉接卡)":"5G/4G USB網卡",
+  "4G網卡 H762 logo":"5G/4G USB網卡",
+  "4G網卡 HW77":"5G/4G USB網卡",
+  "4G網卡 HW78":"5G/4G USB網卡",
+  "5G網卡 IK512":"5G/4G USB網卡",
+  "4G網卡 LT762":"5G/4G USB網卡",
+  "4G網卡 H762 (含轉卡)":"5G/4G USB網卡",
+  "4G網卡 MF297D":"5G/4G USB網卡",
+  "4G網卡 MF79":"5G/4G USB網卡",
+  "4G網卡 MF79U":"5G/4G USB網卡",
+  "4G網卡 MF79U (含轉卡)":"5G/4G USB網卡",
+  "4G網卡 MF920U":"5G/4G USB網卡",
+  "4G網卡 MF920V":"5G/4G USB網卡",
+  "4G網卡 MF920VS":"5G/4G USB網卡",
+  "4G網卡 U6":"5G/4G USB網卡",
+  "4G網卡 U8":"5G/4G USB網卡",
+  "行動電源 Ufi ES-U6":"5G/4G USB網卡",
+  "4G網卡 Type-C UFI-100":"5G/4G USB網卡",
+  "4G長根天線 12dBi SMA-3m":"5G/4G天線",
+  "4G長根天線 TS9-3m-12dBi":"5G/4G天線",
+  "5G/4G長根天線 18dBi SMA-3m":"5G/4G天線",
+  "4G平板天線 28dBi SMA-3m":"5G/4G天線",
+  "4G平板天線 35dBi SMA-3m":"5G/4G天線",
+  "4G平板天線 35dBi SMA-5m":"5G/4G天線",
+  "4G室外平板天線 35dbi 戶外 SMA-3m":"5G/4G天線",
+  "4G室外全向天線 SMA-5m":"5G/4G天線",
+  "4G室外全向天線 固定架-入2出3":"5G/4G天線",
+  "4G黑色小天線 5dBi Ant Black 1組 (2入)":"5G/4G天線",
+  "4G黑色小天線 5dBi-Ant Black(一組2支)入2出3":"5G/4G天線",
+  "4G黑色短天線 5dBi-Ant Black(一組2支)入2出3":"5G/4G天線",
+  "4G黑色小天線 5dBi-Ant Black TS9(一組2支)入2出3":"5G/4G天線",
+  "4G白色小天線 5dBi-Ant White(一組2支)入2出3":"5G/4G天線",
+  "4G白色短天線 5dBi-Ant White(一組2支)入2出3":"5G/4G天線",
+  "5G底座天線 SMA-3m Black":"5G/4G天線",
+  "5G底座天線 SMA-3m Black (含SMA內針轉接頭)":"5G/4G天線",
+  "5G室外全向天線 SMA-3m White":"5G/4G天線",
+  "5G室外全向天線 TS9-3m Black":"5G/4G天線",
+  "5G室外全向天線 TS9-3m White":"5G/4G天線",
+  "4G平板天線 88dBi SMA-10m":"5G/4G天線",
+  "4G平板天線 88dBi SMA-2m":"5G/4G天線",
+  "4G平板天線 88dBi SMA-3m":"5G/4G天線",
+  "4G平板天線 88dBi SMA-5m":"5G/4G天線",
+  "5G/4G黑色小天線 8dBi-Ant Black(一組2入)-入2出3":"5G/4G天線",
+  "5G/4G白色小天線 8dBi-Ant White-(1組2入)入2出3":"5G/4G天線",
+  "5G/4G黑色天線 AZ7795G(一組2支)入2出3":"5G/4G天線",
+  "4G平板天線 CRC9-2m":"5G/4G天線",
+  "4G平板天線 CRC9-5m":"5G/4G天線",
+  "天線延長線 SMA-10m Ext":"5G/4G天線",
+  "4G平板天線 SMA-2m":"5G/4G天線",
+  "天線延長線 SMA-5m Ext":"5G/4G天線",
+  "4G平板天線 TS9-2m":"5G/4G天線",
+  "4G平板天線 TS9-3m":"5G/4G天線",
+  "4G平板天線 TS9-5m":"5G/4G天線",
+  "轉接卡 Noosy Adapter-入2出3":"5G/4G天線配件",
+  "天線轉接頭 SMA內螺內孔轉外螺內孔(1組2入)--入2出3":"5G/4G天線配件",
+  "天線轉接頭 SMA內螺內針轉外螺內針(1組2入)-入2出3":"5G/4G天線配件",
+  "天線轉接頭 SMA轉CRC9(一組2個)入2出3":"5G/4G天線配件",
+  "天線轉接頭 SMA轉TS9(一組2個)入2出3":"5G/4G天線配件",
+  "WiFi白色小天線 3dBi WiFi Antenna White":"WiFi天線",
+  "WiFi黑色扁型天線 5dBi WiFi Antenna Black (Flat)":"WiFi天線",
+  "ASUS WiFi 天線(一組3入)":"WiFi天線",
+  "ASUS WiFi 天線 Black(1組2入)-入2出3":"WiFi天線",
+  "ASUS WiFi 天線 Red(1組2入)-入2出3":"WiFi天線",
+  "Linksys WiFi 天線(一組3入)":"WiFi天線",
+  "IP電話機 A10W":"IP電話機",
+  "IP電話機 A20W":"IP電話機",
+  "IP電話機 A20W 聽筒":"IP電話機",
+  "IP電話機 A21":"IP電話機",
+  "IP電話機 A48WAC":"IP電話機",
+  "IP電話機 C61S":"IP電話機",
+  "IP電話機 C62G":"IP電話機",
+  "IP電話機 C62U":"IP電話機",
+  "IP電話機 E302":"IP電話機",
+  "IP電話機 E302-V2051":"IP電話機",
+  "IP電話機 F58":"IP電話機",
+  "IP電話機 X1P":"IP電話機",
+  "IP電話機 X2CP":"IP電話機",
+  "IP電話機 X2P":"IP電話機",
+  "IP電話機 X3S":"IP電話機",
+  "IP電話機 X3SP":"IP電話機",
+  "IP電話機 X3SP w/o Adapter":"IP電話機",
+  "IP電話機 X3SP 聽筒":"IP電話機",
+  "IP電話機 X3U Pro w/o Adapter":"IP電話機",
+  "IP電話機 X4G":"IP電話機",
+  "IP電話機 FIP10":"IP電話機",
+  "IP電話機 FIP13G":"IP電話機",
+  "IP電話機 FIP16+":"IP電話機",
+  "IP電話機 GRP2601":"IP電話機",
+  "IP電話機 GRP2602":"IP電話機",
+  "IP電話機 GRP2602P":"IP電話機",
+  "IP電話機 GRP2602P w/o Adapter":"IP電話機",
+  "IP電話機 GRP2602W":"IP電話機",
+  "IP電話機 GRP2612":"IP電話機",
+  "IP電話機 GXP1610/1615":"IP電話機",
+  "IP電話機 GXP1620/1625":"IP電話機",
+  "IP電話機 GXP1620/1625":"IP電話機",
+  "IP電話機 GXP1760W":"IP電話機",
+  "IP電話機 GXP2130":"IP電話機",
+  "IP電話機 GXP2135":"IP電話機",
+  "IP電話機 H2U":"IP電話機",
+  "IP電話機 H6w":"IP電話機",
+  "會議電話 IP7000":"IP電話機",
+  "IP電話機 KX-HDV100":"IP電話機",
+  "IP電話機 KX-HDV130":"IP電話機",
+  "IP電話機 MP56 (含供電器)":"IP電話機",
+  "IP電話機 SPA303":"IP電話機",
+  "IP電話機 SPA514G":"IP電話機",
+  "IP電話機 SPA921":"IP電話機",
+  "IP電話機 T19 E2":"IP電話機",
+  "IP電話機 T19P E2":"IP電話機",
+  "IP電話機 T21P E2":"IP電話機",
+  "IP電話機 T21P E2 福利品":"IP電話機",
+  "IP電話機 T23G":"IP電話機",
+  "IP電話機 T29G":"IP電話機",
+  "IP電話機 T30":"IP電話機",
+  "IP電話機 T30P":"IP電話機",
+  "IP電話機 T31":"IP電話機",
+  "IP電話機 T31P":"IP電話機",
+  "IP電話機 T31P 含電源線":"IP電話機",
+  "IP電話機 T31P 聽筒 (含線)":"IP電話機",
+  "IP電話機 T33G":"IP電話機",
+  "IP電話機 T33P":"IP電話機",
+  "IP電話機 T34W":"IP電話機",
+  "IP電話機 T42U":"IP電話機",
+  "IP電話機 TAIP108":"IP電話機",
+  "IP電話機 V50G":"IP電話機",
+  "IP電話機 V50P":"IP電話機",
+  "IP電話機 V60P":"IP電話機",
+  "IP電話機 V60W":"IP電話機",
+  "IP電話機 V61W":"IP電話機",
+  "IP電話機 V62W":"IP電話機",
+  "IP電話機 V66":"IP電話機",
+  "IP電話機 VVX250":"IP電話機",
+  "IP電話機 VVX300":"IP電話機",
+  "IP電話機 W610W":"IP電話機",
+  "IP電話機 W620W":"IP電話機",
+  "IP電話機 WP810":"IP電話機",
+  "IP電話機 WP826":"IP電話機",
+  "IP電話機 WS290-N":"IP電話機",
+  "IP電話機 X1":"IP電話機",
+  "IP電話機 X1E":"IP電話機",
+  "IP電話機 X1SP":"IP電話機",
+  "IP電話機 X1SP w/o Adapter":"IP電話機",
+  "IP電話機 X1W":"IP電話機",
+  "IP電話機 X301":"IP電話機",
+  "IP電話機 X301G w/o Adapter":"IP電話機",
+  "IP電話機 X301P":"IP電話機",
+  "IP電話機 X301P w/o Adapter":"IP電話機",
+  "IP電話機 X301W":"IP電話機",
+  "IP電話機 X303":"IP電話機",
+  "IP電話機 X303G":"IP電話機",
+  "IP電話機 X303G w/o Adapter":"IP電話機",
+  "IP電話機 X303P":"IP電話機",
+  "IP電話機 X303P w/o Adapter":"IP電話機",
+  "IP電話機 X303P 聽筒":"IP電話機",
+  "IP電話機 X303W":"IP電話機",
+  "IP電話機 X3S":"IP電話機",
+  "IP電話機 X3SG":"IP電話機",
+  "IP電話機 X3SG Pro":"IP電話機",
+  "IP電話機 X3SG w/o Adapter":"IP電話機",
+  "IP電話機 X3SG w/o Adapter":"IP電話機",
+  "IP電話機 X3SW":"IP電話機",
+  "IP電話機 X3U Pro":"IP電話機",
+  "IP電話機 X3V":"IP電話機",
+  "IP電話機 X4":"IP電話機",
+  "IP電話機 X4 w/o Adapter":"IP電話機",
+  "IP電話機 X4G":"IP電話機",
+  "IP電話機 X4U":"IP電話機",
+  "IP電話機 X5U":"IP電話機",
+  "IP電話機 X6U":"IP電話機",
+  "IP電話機 X7":"IP電話機",
+  "IP電話機 X7C":"IP電話機",
+  "IP電話耳麥 YHS33":"IP電話機",
+  "IP電話耳麥 YHS34":"IP電話機",
+  "變壓器 12V1A Adapter-入2出3":"IP電話機配件",
+  "5V USB充電頭--入2出3":"IP電話機配件",
+  "耳麥電話線 DN1001-入2出3":"IP電話機配件",
+  "耳麥電話線 DN1002 (Avaya)-入2出3":"IP電話機配件",
+  "耳麥電話線 DN1003 (Cisco)-入2出3":"IP電話機配件",
+  "耳麥電話線 DN1006 (3.5mm單插頭)-入2出3":"IP電話機配件",
+  "耳麥電話線 DN1008 (Yealink)-入2出3":"IP電話機配件",
+  "耳麥電話線 DN1011 (USB)-入2出3":"IP電話機配件",
+  "耳麥電話線 DN1028P-入2出3":"IP電話機配件",
+  "變壓器 Fanvil 12V Adapter-入2出3":"IP電話機配件",
+  "變壓器 Fanvil 5V Adapter 入2出3":"IP電話機配件",
+  "耳麥電話線 GN1200-入2出3":"IP電話機配件",
+  "變壓器 Grandstream 5V Adapter":"IP電話機配件",
+  "電話耳機轉接頭 RJ11 Adapter":"IP電話機配件",
+  "電話線 RJ11 Cable":"IP電話機配件",
+  "電話線 RJ45 Cable":"IP電話機配件",
+  "電話耳機轉接頭 RJ9 Adapter-入2出3":"IP電話機配件",
+  "變壓器 RTL0080 12V Adapter-入2出3":"IP電話機配件",
+  "電話壁掛架子 WB101":"IP電話機配件",
+  "電話壁掛架子 WB102":"IP電話機配件",
+  "電話壁掛架子 WB108":"IP電話機配件",
+  "變壓器 ZTE 12V1A Adapter-入2出3":"IP電話機配件",
+  "IP轉換器 DAG1000 2 FXO":"IP電話轉換器",
+  "IP轉換器 DAG1000 4 FXO":"IP電話轉換器",
+  "IP轉換器 DAG1000 8 FXO":"IP電話轉換器",
+  "IP電話轉換器 HT701":"IP電話轉換器",
+  "IP轉換器 HT801":"IP電話轉換器",
+  "IP轉換器 HT802":"IP電話轉換器",
+  "IP電話轉換器 HT812":"IP電話轉換器",
+  "IP轉換器 HT813":"IP電話轉換器",
+  "IP轉換器 HT814":"IP電話轉換器",
+  "IP電話轉換器 HT841":"IP電話轉換器",
+  "IP轉換器 HX402G":"IP電話轉換器",
+  "IP轉換器 HX440G":"IP電話轉換器",
+  "Linksys IP電話轉換器 PAP2T-NA":"IP電話轉換器",
+  "Linksys IP電話轉換器 SPA2102":"IP電話轉換器",
+  "Linksys IP電話轉換器 SPA3000":"IP電話轉換器",
+  "Linksys IP電話轉換器 SPA3102":"IP電話轉換器",
+  "Linksys IP電話轉換器 SPA400":"IP電話轉換器",
+  "Linksys IP電話轉換器 SPA9000":"IP電話轉換器",
+  "IP對講機 A10":"IP門口機",
+  "IP對講機 H501":"IP門口機",
+  "IP對講機 i10":"IP門口機",
+  "IP對講機 i10s":"IP門口機",
+  "IP對講機 i10sv":"IP門口機",
+  "IP對講機 i10v":"IP門口機",
+  "IP對講機 i60k":"IP門口機",
+  "視訊對講機 C600":"IP影像室內對講機",
+  "視訊對講機 F600S":"IP影像室內對講機",
+  "網路交換機 UCM6302A":"IP總機系統",
+  "網路交換機 UCX100 1O1S":"IP總機系統",
+  "網路交換機 UCX100 1T":"IP總機系統",
+  "網路交換機 UCX100 2O":"IP總機系統",
+  "網路交換機 UCX200 2O":"IP總機系統",
+  "網路交換機 UCX200 Pro 4O":"IP總機系統",
+  "電話耳麥 Addasound Crystal 2700":"耳機麥克風",
+  "電話耳麥 Addasound Crystal 2700 (DN1001)":"耳機麥克風",
+  "電話耳麥 Addasound Crystal 2700 (DN1003)":"耳機麥克風",
+  "電話耳麥 Addasound Crystal 2700 (DN1006)":"耳機麥克風",
+  "電話耳麥 Addasound Crystal 2700 (DN1021)":"耳機麥克風",
+  "電話耳麥 Addasound Crystal 2700 w/o Cord":"耳機麥克風",
+  "電話耳麥 Addasound Crystal 2700 耳罩(1組2入)-入2出3":"耳機麥克風",
+  "電話耳麥 Addasound Crystal 2700 耳罩 (含卡扣) (1組2入)-入2出3":"耳機麥克風",
+  "電話耳麥 Addasound Crystal 2700 耳罩卡扣 (1組2入)-入2出3":"耳機麥克風",
+  "電話耳麥 Addasound Crystal 2700 麥克風罩-(1組2入)入2出3":"耳機麥克風",
+  "電話耳麥 Addasound Crystal 2731":"耳機麥克風",
+  "電話耳麥 Addasound Crystal 2731 (DN1001)":"耳機麥克風",
+  "電話耳麥 Addasound Crystal 2731 (DN1008)":"耳機麥克風",
+  "電話耳麥 Addasound Crystal 2731 w/o Cord":"耳機麥克風",
+  "電話耳麥 Addasound Crystal 2731 耳罩(1組2入)-入2出3":"耳機麥克風",
+  "電話耳麥 Addasound Crystal 2731 耳罩 - 副廠(1組2入)-入2出3":"耳機麥克風",
+  "電話耳麥 Addasound Crystal 2732":"耳機麥克風",
+  "電話耳麥 Addasound Crystal 2732 (DN1001)":"耳機麥克風",
+  "電話耳麥 Addasound Crystal 2732 (DN1003)":"耳機麥克風",
+  "電話耳麥 Addasound Crystal 2732 (DN1011 USB)":"耳機麥克風",
+  "電話耳麥 Addasound Crystal 2732 w/o Cord":"耳機麥克風",
+  "電話耳麥 Addasound Crystal 2831 (DN1003)":"耳機麥克風",
+  "電話耳麥 Addasound Crystal 2831 耳罩(1組2入)-入2出3":"耳機麥克風",
+  "電話耳麥 Addasound Crystal 2831 麥克風罩組 (1組2入)-入2出3":"耳機麥克風",
+  "電話耳麥 Addasound Crystal 2832 (DN1001)":"耳機麥克風",
+  "麥克風 ATR2500-USB":"耳機麥克風",
+  "電話耳麥 Benertech A710":"耳機麥克風",
+  "電話耳麥 Benertech A720":"耳機麥克風",
+  "電話耳麥 Crystal 2700":"耳機麥克風",
+  "電話耳麥 DR10-100 3.5mm單接頭 (單耳)":"耳機麥克風",
+  "電話耳麥 DR10-100 3.5mm雙接頭 (單耳)":"耳機麥克風",
+  "電話耳麥 DR10-100 RJ9 (單耳)":"耳機麥克風",
+  "電話耳麥 DR10-100 RJ9 無調音 (單耳)":"耳機麥克風",
+  "電話耳麥 DR10-100 Type-C (單耳)":"耳機麥克風",
+  "電話耳麥 DR10-100 USB (單耳)":"耳機麥克風",
+  "電話耳麥 DR10-100 單接頭 (手機/平板) (單耳)":"耳機麥克風",
+  "電話耳麥 DR10-100 無調音 3.5mm單接頭 (單耳)":"耳機麥克風",
+  "電話耳麥 DR10-200 3.5mm單接頭 (雙耳)":"耳機麥克風",
+  "電話耳麥 DR10-200 3.5mm雙接頭 (單耳)":"耳機麥克風",
+  "電話耳麥 DR10-200 3.5mm雙接頭 (雙耳)":"耳機麥克風",
+  "電話耳麥 DR10-200 RJ9 (雙耳)":"耳機麥克風",
+  "電話耳麥 DR10-200 RJ9 無調音 (雙耳)":"耳機麥克風",
+  "電話耳麥 DR10-200 Type-C (雙耳)":"耳機麥克風",
+  "電話耳麥 DR20-200 RJ9 (雙耳)":"耳機麥克風",
+  "電腦耳麥 DX-132":"耳機麥克風",
+  "耳機麥克風 EMeet HS50":"耳機麥克風",
+  "電腦耳麥 H340":"耳機麥克風",
+  "電腦耳麥 H390":"耳機麥克風",
+  "電話耳麥 H500D RJ9":"耳機麥克風",
+  "電話耳麥 HD251":"耳機麥克風",
+  "電競耳麥 HP 3.5mm雙接頭 (黑)":"耳機麥克風",
+  "電競耳麥 HP USB 7.1聲道 (白)":"耳機麥克風",
+  "電競耳麥 HP USB 7.1聲道 (黑)":"耳機麥克風",
+  "電話耳麥 HT201":"耳機麥克風",
+  "電話耳麥 HT202":"耳機麥克風",
+  "耳機麥克風 IE 100 Pro (透明色)":"耳機麥克風",
+  "耳機麥克風 IE 100 Pro (黑色)":"耳機麥克風",
+  "電話耳麥 Jabra Biz 2300":"耳機麥克風",
+  "電話耳麥 Jabra Biz 2300 (QD to RJ9)":"耳機麥克風",
+  "電話耳麥 Jabra Biz 2300 Duo (QD to RJ9)":"耳機麥克風",
+  "電腦耳麥 Jabra Evolve 30":"耳機麥克風",
+  "電話耳麥 MRD308":"耳機麥克風",
+  "電話耳麥 MRD809":"耳機麥克風",
+  "電話耳麥 Q18 升級版 RJ9 (單耳)":"耳機麥克風",
+  "電話耳麥 Q28 升級版 RJ9 (雙耳)":"耳機麥克風",
+  "電腦耳麥線 QD to USB Cord-入2出3":"耳機麥克風",
+  "電腦耳機 SHP9500":"耳機麥克風",
+  "動圈式麥克風 SM58S":"耳機麥克風",
+  "電話耳麥 SP11":"耳機麥克風",
+  "電話耳麥 V201T 升級版 RJ9 (單耳)":"耳機麥克風",
+  "電話耳麥 V202T 升級版 RJ9 (雙耳)":"耳機麥克風",
+  "電話耳麥 VT200 (單耳) USB":"耳機麥克風",
+  "電話耳麥 VT200 (單耳) 單接頭 (手機/平板)":"耳機麥克風",
+  "電話耳麥 VT200 (單耳) 雙接頭":"耳機麥克風",
+  "電話耳麥 VT200 RJ9 (單耳)":"耳機麥克風",
+  "電話耳麥 VT200 RJ9 (單耳) 無調音":"耳機麥克風",
+  "電話耳麥 VT200D RJ9":"耳機麥克風",
+  "電話耳麥 VT200D RJ9 無調音":"耳機麥克風",
+  "電話耳麥 VT200D Type C (手機/電腦)":"耳機麥克風",
+  "電話耳麥 VT200D USB":"耳機麥克風",
+  "電話耳麥 VT200D 單接頭 (手機/平板)":"耳機麥克風",
+  "電話耳麥 VT200D 無調音 雙接頭":"耳機麥克風",
+  "電話耳麥 VT200D 雙接頭":"耳機麥克風",
+  "耳掛式耳麥 XD900 3.5mm 單插頭":"耳機麥克風",
+  "耳掛式耳麥 XD900 3.5mm 雙插頭":"耳機麥克風",
+  "耳掛式耳麥 XD900 RJ9":"耳機麥克風",
+  "電話耳麥 Yealtel E200":"耳機麥克風",
+  "耳機轉接頭 IE 100 Pro 轉接頭 (Type-C)(入2出3)":"耳機麥克風配件",
+  "耳機轉接頭 IE 100 Pro 轉接頭 (蘋果)(入2出3)":"耳機麥克風配件",
+  "耳麥轉接頭 3.5mm轉RJ9 (單插頭)--入2出3":"耳機麥克風配件",
+  "耳麥轉接頭 3.5mm轉RJ9 (雙插頭) --入2出3":"耳機麥克風配件",
+  "電話耳機線 Benertech RJ9 QD Cord-入2出3":"耳機麥克風配件",
+  "電話耳機線 Benertech RJ9 QD Cord (Cisco)-入2出3":"耳機麥克風配件",
+  "耳麥耳罩 DR10 耳罩(1組 2入)-入2出3":"耳機麥克風配件",
+  "耳麥線 Jabra Biz 2300 RJ9線-入2出3":"耳機麥克風配件",
+  "耳麥轉接盒 Jabra Link 860":"耳機麥克風配件",
+  "電話耳機線 MRD308 RJ9 QD Cord":"耳機麥克風配件",
+  "培訓耳麥線 QD to 2 x QD Cord-入2出3":"耳機麥克風配件",
+  "耳麥耳罩 VT200D 耳罩(1組2入)-入2出3":"耳機麥克風配件",
+  "耳麥耳罩 VT200D 耳罩 一組(2入) (透氣厚皮套)-入2出3":"耳機麥克風配件",
+  "耳麥耳罩 VT200D 麥克風罩-入2出3":"耳機麥克風配件",
+  "WiFi分享器 CT-AC2900":"WiFi路由器",
+  "WiFi 分享器 E9450":"WiFi路由器",
+  "WiFi分享器 GT-AC5300":"WiFi路由器",
+  "WiFi 分享器 MX5501":"WiFi路由器",
+  "WiFi 分享器 MX5503":"WiFi路由器",
+  "WiFi分享器 RT-AC1900P":"WiFi路由器",
+  "WiFi分享器 RT-AC68U":"WiFi路由器",
+  "WiFi分享器 RT-AC86U":"WiFi路由器",
+  "WiFi分享器 RT-AC88U":"WiFi路由器",
+  "WiFi分享器 RT-AX56U":"WiFi路由器",
+  "WiFi路由器 RT-AX57M":"WiFi路由器",
+  "WiFi 7分享器 RT-BE58GO":"WiFi路由器",
+  "WiFi分享器 TUF-AX3000":"WiFi路由器",
+  "WiFi 7分享器 WR3600":"WiFi路由器",
+  "WiFi分享器 WRT1900AC V2":"WiFi路由器",
+  "WiFi分享器 WRX560":"WiFi路由器",
+  "WiFi延伸器 EX6150":"WiFi訊號延伸器",
+  "WiFi 5G延伸器 ME30":"WiFi訊號延伸器",
+  "WiFi 6延伸器 ME60X":"WiFi訊號延伸器",
+  "WiFi延伸器 MW300RE":"WiFi訊號延伸器",
+  "雙頻5G WiFi延伸器 RE315":"WiFi訊號延伸器",
+  "WiFi延伸器 RE4000W":"WiFi訊號延伸器",
+  "WiFi延伸器 Tenda A12":"WiFi訊號延伸器",
+  "WiFi延伸器 WR188 2.4G (4天線)":"WiFi訊號延伸器",
+  "WiFi延伸器 WR188 2.4G (6天線)":"WiFi訊號延伸器",
+  "WiFi延伸器 WR188 5G (4天線)":"WiFi訊號延伸器",
+  "WiFi延伸器 WR288 5G (4天線)":"WiFi訊號延伸器",
+  "網路交換機 1G1S1O":"網路交換器",
+  "網路交換機 1T1S1O":"網路交換器",
+  "PoE交換器 GS-1005HP (5 Port)":"網路交換器",
+  "網路交換器 GS-105B (5 Port)":"網路交換器",
+  "網路交換器 GS-108B (8 Port)":"網路交換器",
+  "網路交換器 GX-U1051":"網路交換器",
+  "網路交換器 LGS105":"網路交換器",
+  "網路交換機 OM20G 2O2S":"網路交換器",
+  "網路交換機 OM20G 4O":"網路交換器",
+  "網路交換機 SG105P":"網路交換器",
+  "PoE交換器 TL-SG1005P":"網路交換器",
+  "PoE交換器 TL-SG1008P V7":"網路交換器",
+  "網路攝影機 B525":"網路攝影機",
+  "網路攝影機 C270":"網路攝影機",
+  "網路攝影機 C270i 升級版":"網路攝影機",
+  "網路攝影機 C310":"網路攝影機",
+  "網路攝影機 C670i":"網路攝影機",
+  "網路攝影機 C930c":"網路攝影機",
+  "網路攝影機 Spedal 920 Pro":"網路攝影機",
+  "網路攝影機 Spedal 920 Pro":"網路攝影機",
+  "網路攝影機 Spedal 920 Pro (含支架)":"網路攝影機",
+  "網路攝影機支架 Spedal 920 Pro支架":"網路攝影機",
+  "網路攝影機 Spedal 928":"網路攝影機",
+  "網路監視器 TL-IPC14CH":"網路攝影機",
+  "網路監視器 TL-IPC44AN":"網路攝影機",
+  "網路監視器 TL-IPC633-A4":"網路攝影機",
+  "網路監視器 TL-IPC646-A4":"網路攝影機",
+  "網路監視器 TL-IPC64C":"網路攝影機",
+  "Mrobo 錄音器":"錄音器",
+  "錄音器 VTR5010 Pro 32GB":"錄音器",
+  "錄音器 VTR5102 (含小布袋)":"錄音器",
+  "錄音器 VTR5102 16GB":"錄音器",
+  "錄音器 VTR5102 16GB (含小布袋)":"錄音器",
+  "錄音器 VTR5102 32GB":"錄音器",
+  "錄音器 VTR5102 32GB (含小布袋)":"錄音器",
+  "錄音器 VTR5260 16GB":"錄音器",
+  "錄音器 VTR5260 16GB (含小布袋)":"錄音器",
+  "錄音器 VTR5260 16GB (含充電頭)":"錄音器",
+  "錄音器 VTR5260 16GB (含讀卡器)":"錄音器",
+  "錄音器 VTR5260 32GB":"錄音器",
+  "錄音器 VTR5260 Pro 16GB":"錄音器",
+  "錄音器 VTR5260 Pro 32GB":"錄音器",
+  "緊急按鈕 DJS-995":"緊急設備",
+  "無線門鈴 DJS-DR95":"緊急設備",
+  "緊急呼叫器 DJS-SOS01":"緊急設備"
+};
+
+const CAT_ICONS = {
+  '5G路由器':'📡', '4G路由器':'📡', '4G工業路由器':'🏭',
+  '5G行動分享器':'📱', '4G行動分享器':'📱', '行動分享器電池':'🔋',
+  '5G/4G USB網卡':'🔌', '5G/4G天線':'📶', '5G/4G天線配件':'🔧',
+  'WiFi天線':'📶', 'IP電話機':'☎️', 'WiFi IP電話機':'☎️',
+  'IP電話機配件':'🔧', 'IP電話轉換器':'🔄', 'IP門口機':'🚪',
+  'IP影像室內對講機':'📷', 'IP總機系統':'🏢', '耳機麥克風':'🎧',
+  '耳機麥克風配件':'🎧', 'WiFi路由器':'🌐', 'WiFi訊號延伸器':'🌐',
+  '網路交換器':'🔀', '網路攝影機':'📸', '錄音器':'🎙️',
+  '緊急設備':'🆘', '其他配件':'📦'
+};
+
+const CAT_ORDER = ['5G路由器','4G路由器','4G工業路由器','5G行動分享器','4G行動分享器',
+  '行動分享器電池','5G/4G USB網卡','5G/4G天線','5G/4G天線配件','WiFi天線',
+  'IP電話機','WiFi IP電話機','IP電話機配件','IP電話轉換器','IP門口機',
+  'IP影像室內對講機','IP總機系統','耳機麥克風','耳機麥克風配件',
+  'WiFi路由器','WiFi訊號延伸器','網路交換器','網路攝影機','錄音器','緊急設備','其他配件'];
+
+function getProductCategory(name) {
+  return PRODUCT_CATEGORIES[name] || '其他配件';
 }
 
 // ── Archive / Unarchive ──────────────────────────────────────
@@ -1219,6 +2288,220 @@ async function bulkArchive(){
   alert('✅ 已封存 '+names.length+' 個品項。可點擊「封存清單」查看並重新啟用。');
 }
 
+// ── Inventory View Toggle ────────────────────────────────────
+let inventoryView = 'supplier';
+function setInventoryView(view) {
+  inventoryView = view;
+  const supBtn = document.getElementById('view-supplier-btn');
+  const catBtn = document.getElementById('view-category-btn');
+  const supContent = document.getElementById('main-content');
+  const catContent = document.getElementById('category-view');
+  const supTabs = document.getElementById('sup-tabs');
+  if(view === 'supplier') {
+    supBtn.style.background = 'var(--accent)'; supBtn.style.color = '#fff';
+    catBtn.style.background = 'var(--surface2)'; catBtn.style.color = 'var(--text2)';
+    if(supContent) { supContent.style.display=''; }
+    if(catContent) catContent.style.display = 'none';
+  } else {
+    catBtn.style.background = 'var(--accent)'; catBtn.style.color = '#fff';
+    supBtn.style.background = 'var(--surface2)'; supBtn.style.color = 'var(--text2)';
+    if(supContent) { supContent.style.display='none'; }
+    if(catContent) { catContent.style.display = 'block'; renderCategoryView(); }
+  }
+}
+
+function renderCategoryView() {
+  const el = document.getElementById('category-content');
+  if(!el || !inventoryData.length) return;
+  el.innerHTML = '<div class="loading"><div class="spinner"></div>載入中…</div>';
+  loadCategoryOverrides().then(() => _renderCategoryView());
+}
+function _renderCategoryView() {
+  const el = document.getElementById('category-content');
+  if(!el) return;
+  const q = (document.getElementById('search')?.value||'').toLowerCase();
+  const hideZeros = document.getElementById('hideZeros')?.checked;
+  const defT = parseInt(document.getElementById('threshold')?.value)||5;
+
+  // Group inventory by category
+  const catMap = {};
+  CAT_ORDER.forEach(c => catMap[c] = {items:[], crit:0, low:0, ok:0});
+
+  inventoryData.forEach(r => {
+    const name = (r.product_name||'').trim();
+    if(isExcluded(name) || archivedSet.has(name)) return;
+    if(q && !name.toLowerCase().includes(q)) return;
+    const qty = parseFloat(r.quantity)||0;
+    if(hideZeros && qty <= 0) return;
+    const cat = getProductCategoryEffective(name);
+    if(!catMap[cat]) catMap[cat] = {items:[], crit:0, low:0, ok:0};
+    const t = thresholds[name] !== undefined ? thresholds[name] : defT;
+    const st = qty <= 0 ? 'critical' : qty <= t ? 'low' : 'ok';
+    catMap[cat].items.push({name, qty, st, supplier_id: r.supplier_id});
+    if(st==='critical') catMap[cat].crit++;
+    else if(st==='low') catMap[cat].low++;
+    else catMap[cat].ok++;
+  });
+
+  const html = CAT_ORDER.filter(cat => catMap[cat]?.items.length > 0).map(cat => {
+    const {items, crit, low, ok} = catMap[cat];
+    const icon = CAT_ICONS[cat] || '📦';
+    const hasCrit = crit > 0;
+    const rows = items.sort((a,b) => a.qty - b.qty).map(item => {
+      const sup = supplierRules.find(s=>s.supplier_id===item.supplier_id);
+      const supName = sup?.name || '未分類';
+      const qtyColor = item.qty === 0 ? '#dc2626' : item.st === 'low' ? '#b45309' : '#16a34a';
+      const badge = item.st==='critical'?'<span class="badge badge-danger">危急</span>':item.st==='low'?'<span class="badge badge-warning">低庫存</span>':'<span class="badge badge-ok">正常</span>';
+      const sn = item.name.replace(/\'/g,"\\'").replace(/"/g,'&quot;');
+      return `<tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:8px 6px;width:28px;vertical-align:middle;"><input type="checkbox" class="cat-cb item-check" data-name="${sn}" data-cat="${esc(cat)}" onchange="updateCatBulkBar()"></td>
+        <td style="padding:8px 10px;vertical-align:middle;">
+          <div style="font-size:13px;font-weight:500;line-height:1.4;">${hi(item.name,q)}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;">${esc(supName)}</div>
+        </td>
+        <td style="padding:8px 8px;font-size:18px;font-weight:800;color:${qtyColor};text-align:center;white-space:nowrap;vertical-align:middle;min-width:36px;">${item.qty}</td>
+        <td style="padding:8px 4px;text-align:center;white-space:nowrap;vertical-align:middle;">${badge}</td>
+        <td style="padding:8px 6px;text-align:right;white-space:nowrap;vertical-align:middle;"><button onclick="moveSingleProduct('${sn}','${esc(cat)}')" style="font-size:11px;padding:3px 8px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface2);cursor:pointer;color:var(--text2);">移動</button></td>
+      </tr>`;
+    }).join('');
+
+    return `<div style="margin-bottom:8px;border-radius:12px;overflow:hidden;border:1.5px solid ${hasCrit?'#fecaca':'var(--border)'};box-shadow:0 1px 3px rgba(0,0,0,.06);">
+      <div onclick="toggleCatSection('${esc(cat)}')" style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;background:${hasCrit?'#fff8f8':'var(--surface)'};cursor:pointer;" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span id="cat-arr-${esc(cat)}" style="font-size:10px;color:var(--text3);display:inline-block;transition:transform .2s;">▶</span>
+          <span style="font-size:16px;">${icon}</span>
+          <div>
+            <div style="font-size:14px;font-weight:700;">${esc(cat)}</div>
+            <div style="font-size:11px;color:var(--text3);">${items.length} 項</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:5px;">
+          ${crit>0?`<span style="font-size:12px;font-weight:700;color:#dc2626;background:#fef2f2;border:1.5px solid #fecaca;border-radius:99px;padding:3px 10px;">危急 ${crit}</span>`:''}
+          ${low>0?`<span style="font-size:12px;font-weight:700;color:#b45309;background:#fff7ed;border:1.5px solid #fed7aa;border-radius:99px;padding:3px 10px;">低庫存 ${low}</span>`:''}
+          ${ok>0?`<span style="font-size:12px;color:var(--text3);padding:3px 8px;">✓ ${ok}</span>`:''}
+        </div>
+      </div>
+      <div id="cat-body-${esc(cat)}" style="display:none;border-top:1px solid ${hasCrit?'#fecaca':'var(--border)'};">
+        <table style="width:100%;border-collapse:collapse;background:var(--surface);">
+          <thead><tr style="background:var(--surface2);">
+            <th style="padding:7px 6px;width:28px;border-bottom:1px solid var(--border);"><input type="checkbox" class="item-check" onchange="catSelectAll(this,'${esc(cat)}')"></th>
+            <th style="padding:7px 10px;font-size:10px;font-weight:700;text-align:left;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--border);">品名</th>
+            <th style="padding:7px 8px;font-size:10px;font-weight:700;text-align:center;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--border);">庫存</th>
+            <th style="padding:7px 4px;font-size:10px;font-weight:700;text-align:center;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--border);">狀態</th>
+            <th style="padding:7px 6px;border-bottom:1px solid var(--border);"></th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = html || '<div style="text-align:center;padding:3rem;color:var(--text3);">無資料</div>';
+}
+
+// ── Category management ──────────────────────────────────────
+let customCategoryOverrides = {};
+
+async function loadCategoryOverrides() {
+  try {
+    const {data} = await sb.from('category_overrides').select('product_name,category');
+    customCategoryOverrides = {};
+    (data||[]).forEach(r => { customCategoryOverrides[r.product_name] = r.category; });
+  } catch(e) { customCategoryOverrides = {}; }
+}
+
+function getProductCategoryEffective(name) {
+  return customCategoryOverrides[name] || PRODUCT_CATEGORIES[name] || '其他配件';
+}
+
+function updateCatBulkBar() {
+  const checked = document.querySelectorAll('.cat-cb:checked');
+  const bar = document.getElementById('cat-bulk-bar');
+  const count = document.getElementById('cat-bulk-count');
+  const sel = document.getElementById('cat-bulk-target');
+  if(!bar) return;
+  if(checked.length > 0) {
+    bar.style.display = 'flex';
+    if(count) count.textContent = checked.length + ' 項已選';
+    if(sel && sel.options.length <= 1) {
+      getAllCategories().forEach(cat => {
+        const o = document.createElement('option');
+        o.value = cat; o.textContent = cat; sel.appendChild(o);
+      });
+    }
+  } else { bar.style.display = 'none'; }
+}
+
+function catSelectAll(masterCb, cat) {
+  const body = document.getElementById('cat-body-'+cat);
+  if(!body) return;
+  body.querySelectorAll('.cat-cb').forEach(cb => cb.checked = masterCb.checked);
+  updateCatBulkBar();
+}
+
+function clearCatSelect() {
+  document.querySelectorAll('.cat-cb').forEach(cb => cb.checked = false);
+  const bar = document.getElementById('cat-bulk-bar');
+  if(bar) bar.style.display = 'none';
+}
+
+async function moveSingleProduct(name, fromCat) {
+  // Use modal instead of prompt
+  document.getElementById('move-cat-name').textContent = name;
+  document.getElementById('move-cat-from').textContent = fromCat;
+  const sel = document.getElementById('move-cat-select');
+  sel.innerHTML = getAllCategories().map(c =>
+    `<option value="${esc(c)}"${c===fromCat?' selected':''}>${esc(c)}</option>`
+  ).join('');
+  document.getElementById('move-cat-confirm').onclick = async () => {
+    const newCat = sel.value;
+    if(newCat === fromCat) { closeMoveModal(); return; }
+    await saveCategoryOverride(name, newCat);
+    closeMoveModal();
+    _renderCategoryView();
+  };
+  document.getElementById('move-cat-modal').style.display = 'flex';
+}
+function closeMoveModal() {
+  document.getElementById('move-cat-modal').style.display = 'none';
+}
+
+async function bulkMoveCategory() {
+  const newCat = document.getElementById('cat-bulk-target')?.value;
+  if(!newCat) { alert('請先從下拉選單選擇目標品類'); return; }
+  const checked = [...document.querySelectorAll('.cat-cb:checked')];
+  if(!checked.length) return;
+  for(const cb of checked) {
+    await saveCategoryOverride(cb.dataset.name, newCat);
+  }
+  clearCatSelect();
+  _renderCategoryView();
+}
+
+async function saveCategoryOverride(productName, category) {
+  customCategoryOverrides[productName] = category;
+  try {
+    await sb.from('category_overrides').upsert({product_name: productName, category}, {onConflict:'product_name'});
+  } catch(e) { console.error(e); }
+}
+
+function getAllCategories() {
+  const base = [...CAT_ORDER];
+  Object.values(customCategoryOverrides).forEach(cat => {
+    if(!base.includes(cat)) base.push(cat);
+  });
+  return [...new Set(base)];
+}
+
+function toggleCatSection(cat) {
+  const body = document.getElementById('cat-body-'+cat);
+  const arr = document.getElementById('cat-arr-'+cat);
+  if(!body) return;
+  const open = body.style.display === 'none';
+  body.style.display = open ? 'table' : 'none';
+  if(arr) arr.style.transform = open ? 'rotate(90deg)' : '';
+}
+
 // ── Page Tab Navigation ───────────────────────────────────────
 let currentPageTab = 'inventory';
 function setPageTab(tab) {
@@ -1256,92 +2539,150 @@ async function saveReorderMeta(productName, field, value) {
   } catch(e) {}
 }
 
+function toggleReorderSup(sid, forceOpen) {
+  const body = document.getElementById('sup-body-'+sid);
+  const arr = document.getElementById('arr-'+sid);
+  if(!body) return;
+  const open = forceOpen !== undefined ? forceOpen : body.style.display === 'none';
+  body.style.display = open ? 'table' : 'none';
+  if(arr) arr.style.transform = open ? 'rotate(90deg)' : '';
+}
+function expandAllReorder(open) {
+  document.querySelectorAll('[id^="sup-body-"]').forEach(body => {
+    const sid = body.id.replace('sup-body-','');
+    toggleReorderSup(sid, open);
+  });
+}
+
 function renderReorderTab() {
   const el = document.getElementById('reorder-content');
   if(!inventoryData.length) { el.innerHTML = '<div class="empty">請先上傳庫存報表</div>'; return; }
   el.innerHTML = '<div class="loading"><div class="spinner"></div>載入中…</div>';
   loadReorderMeta().then(() => {
-    const showAll = document.getElementById('reorder-show-all')?.checked;
     const defT = parseInt(document.getElementById('threshold')?.value)||5;
+    const tierFilter = document.getElementById('reorder-tier-filter')?.value || 'all';
+    const showAll = document.getElementById('reorder-show-all')?.checked;
 
-    // Build rows: filter to low/critical unless showAll
-    let rows = inventoryData.filter(r => {
+    // Score each row: urgency = tier weight × (1 - qty/threshold)
+    const tierW = {hot:1000, active:100, slow:10, freebie:5, dead:1};
+
+    let rows = inventoryData.map(r => {
       const name = (r.product_name||'').trim();
-      if(isExcluded(name)) return false;
-      if(archivedSet.has(name)) return false;
-      if(showAll) return true;
-      const t = thresholds[name] !== undefined ? thresholds[name] : defT;
-      return (parseFloat(r.quantity)||0) <= t;
-    }).sort((a,b) => (parseFloat(a.quantity)||0) - (parseFloat(b.quantity)||0));
+      if(isExcluded(name) || archivedSet.has(name)) return null;
+      const sales = getSalesInfo(name);
+      const qty = parseFloat(r.quantity)||0;
+      const t = thresholds[name] !== undefined ? thresholds[name] : (sales ? sales.th : defT);
+      const tier = sales?.t || 'dead';
+      // Filter
+      if(!showAll) {
+        if(qty > t) return null; // above threshold
+        if(qty === 0 && (tier === 'dead' || tier === 'freebie' || !sales)) return null;
+        if(tierFilter !== 'all' && tier !== tierFilter) return null;
+      }
+      const urgency = (tierW[tier]||1) * Math.max(1, t - qty + 1);
+      return {r, name, qty, t, tier, sales, urgency};
+    }).filter(Boolean).sort((a,b) => b.urgency - a.urgency);
 
     if(!rows.length) {
-      el.innerHTML = '<div class="empty" style="text-align:center;padding:2.5rem;color:var(--text3);">✓ 目前無低庫存品項</div>';
+      el.innerHTML = '<div style="text-align:center;padding:3rem;color:var(--text3);font-size:14px;">✓ 目前無需補貨品項</div>';
       return;
     }
 
     // Group by supplier
     const supMap = {};
-    const allSups = [...supplierRules, {supplier_id:'uncat',name:'未分類',brands:''}];
-    allSups.forEach(s => supMap[s.supplier_id] = {sup: s, rows: []});
-    rows.forEach(r => {
-      const sid = r.supplier_id || 'uncat';
-      if(!supMap[sid]) supMap[sid] = {sup:{supplier_id:sid,name:sid,brands:''},rows:[]};
-      supMap[sid].rows.push(r);
+    const supOrder = [...supplierRules.map(s=>s.supplier_id), 'uncat'];
+    rows.forEach(item => {
+      const sid = item.r.supplier_id || 'uncat';
+      if(!supMap[sid]) {
+        const sup = supplierRules.find(s=>s.supplier_id===sid) || {supplier_id:sid, name:'未分類', shop_link:''};
+        supMap[sid] = {sup, rows: []};
+      }
+      supMap[sid].rows.push(item);
     });
 
-    const html = allSups.filter(s => supMap[s.supplier_id]?.rows.length > 0).map(s => {
-      const srows = supMap[s.supplier_id].rows;
-      const rowsHtml = srows.map(r => {
-        const name = (r.product_name||'').trim();
-        const qty = parseFloat(r.quantity)||0;
-        const t = thresholds[name] !== undefined ? thresholds[name] : defT;
-        const st = qty <= 0 ? 'critical' : qty <= t ? 'low' : 'ok';
-        const badge = st==='critical'?'<span class="badge badge-danger">危急</span>':st==='low'?'<span class="badge badge-warning">低庫存</span>':'<span class="badge badge-ok">正常</span>';
+    const html = supOrder.filter(sid => supMap[sid]?.rows.length > 0).map(sid => {
+      const {sup, rows: srows} = supMap[sid];
+      const hotCount = srows.filter(i=>i.tier==='hot').length;
+      const critCount = srows.filter(i=>i.qty===0).length;
+
+      const tableRows = srows.map(item => {
+        const {name, qty, t, tier, sales} = item;
+        const safeName = name.replace(/'/g,"\'").replace(/"/g,'&quot;');
+        const st = qty <= 0 ? 'critical' : 'low';
+        const qtyColor = qty === 0 ? '#dc2626' : '#b45309';
         const meta = reorderMeta[name] || {};
-        const link = meta.reorder_link || '';
+        const link = meta.reorder_link || sup.shop_link || '';
         const uqty = meta.usual_qty || '';
-        const safeName = esc(name);
-        const supShopLink = s.shop_link || '';
-        // Priority: SKU-specific link > supplier shop link > empty
-        let linkBtn;
-        if(link) {
-          linkBtn = `<a href="${esc(link)}" target="_blank" rel="noopener" class="reorder-link-btn">🔗 SKU 連結</a>`;
-        } else if(supShopLink) {
-          linkBtn = `<a href="${esc(supShopLink)}" target="_blank" rel="noopener" class="reorder-link-btn" style="background:var(--warning);border-color:var(--warning);">🏪 店鋪連結</a>`;
-        } else {
-          linkBtn = `<button class="reorder-link-btn empty" onclick="editReorderLink('${safeName}')">+ 新增連結</button>`;
-        }
-        return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.1rem;display:flex;flex-direction:column;gap:.6rem;">
-          <!-- Row 1: name + badge -->
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
-            <div style="font-size:15px;font-weight:600;line-height:1.4;flex:1;min-width:0;word-break:break-word;">${esc(name)}</div>
-            ${badge}
-          </div>
-          <!-- Row 2: qty + usual qty input -->
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span style="font-size:12px;color:var(--text3);">現有庫存</span>
-              <span style="font-size:18px;font-weight:700;" class="qty-val${st==='critical'?' danger':st==='low'?' warning':''}">${qty}</span>
-            </div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span style="font-size:12px;color:var(--text3);">常用補貨量</span>
-              <input class="reorder-qty-input" type="number" min="1" value="${esc(String(uqty))}" placeholder="—" onchange="saveReorderMeta('${safeName}','usual_qty',this.value)" style="width:60px;font-size:14px;padding:4px 8px;">
-            </div>
-          </div>
-          <!-- Row 3: action buttons -->
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px;">
-            ${linkBtn}
-            ${link?`<button class="btn-sm" onclick="editReorderLink('${safeName}')">✎ 編輯連結</button>`:`<button class="btn-sm" onclick="editReorderLink('${safeName}')">+ 新增連結</button>`}
-            <button class="btn-sm primary" onclick="quickLogOrder('${safeName}')">📋 記錄補貨</button>
-          </div>
-        </div>`;
+        const tierBadge = sales ? `<span style="font-size:11px;font-weight:600;color:${TIER_COLOR[tier]};white-space:nowrap;">${TIER_LABEL[tier]}</span>` : '<span style="font-size:11px;color:#9ca3af;">—</span>';
+        const linkCell = link
+          ? `<a href="${esc(link)}" target="_blank" rel="noopener" style="font-size:12px;color:var(--accent);text-decoration:none;white-space:nowrap;">🔗 開啟</a>`
+          : `<button onclick="editReorderLink('${safeName}')" style="font-size:11px;color:var(--text3);background:none;border:1px dashed var(--border-strong);border-radius:4px;padding:2px 8px;cursor:pointer;">+ 連結</button>`;
+        const rowBg = qty === 0 ? 'background:#fff5f5;' : '';
+        return `<tr style="border-bottom:1px solid var(--border);${rowBg}transition:background .1s;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='${qty===0?'#fff5f5':'transparent'}'">
+          <td style="padding:11px 14px;font-size:13px;font-weight:500;line-height:1.4;max-width:320px;">${esc(name)}</td>
+          <td style="padding:11px 10px;text-align:center;white-space:nowrap;">
+            <span style="font-size:17px;font-weight:800;color:${qtyColor};line-height:1;">${qty}</span>
+            <span style="font-size:10px;color:var(--text3);"> /${t}</span>
+          </td>
+          <td style="padding:11px 10px;text-align:center;">${tierBadge}</td>
+          <td style="padding:11px 10px;text-align:center;">
+            <input type="number" min="1" value="${esc(String(uqty))}" placeholder="—"
+              onchange="saveReorderMeta('${safeName}','usual_qty',this.value)"
+              style="width:52px;text-align:center;padding:4px 6px;font-size:13px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);color:var(--text);font-weight:600;">
+          </td>
+          <td style="padding:11px 14px;text-align:right;white-space:nowrap;">
+            ${linkCell}
+            <button onclick="quickLogOrder('${safeName}')" style="margin-left:6px;font-size:12px;padding:5px 12px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;">📋 補貨</button>
+          </td>
+        </tr>`;
       }).join('');
-      return `<div class="sup-section">
-        <div class="sup-header"><div class="sup-title">${esc(s.name)}</div></div>
-        <div style="display:flex;flex-direction:column;gap:.6rem;">${rowsHtml}</div>
+
+      const badges = [
+        critCount > 0 ? `<span style="font-size:12px;font-weight:700;color:#dc2626;background:#fef2f2;border:1.5px solid #fecaca;border-radius:99px;padding:3px 10px;letter-spacing:.01em;">危急 ${critCount}</span>` : '',
+        hotCount > 0 ? `<span style="font-size:12px;font-weight:700;color:#92400e;background:#fff7ed;border:1.5px solid #fed7aa;border-radius:99px;padding:3px 10px;">🔥 ${hotCount}</span>` : '',
+      ].filter(Boolean).join(' ');
+
+      const safeSid = esc(sid);
+      const hasCrit = critCount > 0;
+      return `<div style="margin-bottom:6px;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.07);border:1.5px solid ${hasCrit?'#fecaca':'var(--border)'};">
+        <div onclick="toggleReorderSup('${safeSid}')" style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:${hasCrit?'#fff8f8':'var(--surface)'};cursor:pointer;user-select:none;" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span id="arr-${safeSid}" style="font-size:10px;color:var(--text3);transition:transform .2s;display:inline-block;flex-shrink:0;">▶</span>
+            <div>
+              <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-.01em;">${esc(sup.name)}</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:1px;">${srows.length} 項待補貨</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:5px;align-items:center;">${badges}</div>
+        </div>
+        <div id="sup-body-${safeSid}" style="display:none;border-top:1px solid ${hasCrit?'#fecaca':'var(--border)'};">
+          <table style="width:100%;border-collapse:collapse;background:var(--surface);">
+            <thead><tr style="background:var(--surface2);">
+              <th style="padding:8px 14px;font-size:10px;font-weight:700;text-align:left;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--border);">品名</th>
+              <th style="padding:8px 10px;font-size:10px;font-weight:700;text-align:center;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--border);">庫存</th>
+              <th style="padding:8px 10px;font-size:10px;font-weight:700;text-align:center;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--border);">熱度</th>
+              <th style="padding:8px 10px;font-size:10px;font-weight:700;text-align:center;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--border);">補貨量</th>
+              <th style="padding:8px 14px;font-size:10px;font-weight:700;text-align:right;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--border);">動作</th>
+            </tr></thead>
+            <tbody>${tableRows}</tbody>
+          </table>
+        </div>
       </div>`;
     }).join('');
-    el.innerHTML = html || '<div class="empty">無資料</div>';
+
+    const hotTotal = rows.filter(i=>i.tier==='hot'&&i.qty===0).length;
+    const critTotal = rows.filter(i=>i.qty===0).length;
+    el.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px;">
+      <div>
+        <div style="font-size:16px;font-weight:700;">${rows.length} 項需補貨</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px;">其中 <span style="color:#dc2626;font-weight:600;">${critTotal} 項零庫存</span>，<span style="color:#b45309;font-weight:600;">${hotTotal} 項熱銷缺貨</span></div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button onclick="expandAllReorder(true)" style="font-size:12px;padding:5px 12px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);cursor:pointer;color:var(--text2);font-weight:500;">全部展開</button>
+        <button onclick="expandAllReorder(false)" style="font-size:12px;padding:5px 12px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);cursor:pointer;color:var(--text2);font-weight:500;">全部收合</button>
+      </div>
+    </div>` + html;
+    // All sections start collapsed — user taps to expand
   });
 }
 
@@ -1669,6 +3010,25 @@ async function saveNewOrder() {
     <div style="display:flex;gap:8px;justify-content:flex-end;">
       <button class="modal-cancel" onclick="closeEditSupModal()">取消</button>
       <button class="modal-submit" onclick="saveEditSup()">儲存</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Move Category Modal -->
+<div id="move-cat-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeMoveModal()">
+  <div class="modal" style="max-width:400px;padding:1.5rem;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+      <div class="modal-title">移動品項</div>
+      <button onclick="closeMoveModal()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--text3);">✕</button>
+    </div>
+    <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;word-break:break-word;" id="move-cat-name"></div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:1rem;">目前品類：<span id="move-cat-from" style="color:var(--accent);"></span></div>
+    <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px;">移動至：</div>
+    <select id="move-cat-select" style="width:100%;padding:9px 12px;font-size:14px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);cursor:pointer;margin-bottom:1.25rem;"></select>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="modal-cancel" onclick="closeMoveModal()">取消</button>
+      <button class="modal-submit" id="move-cat-confirm">確認移動</button>
     </div>
   </div>
 </div>
