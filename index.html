@@ -268,6 +268,73 @@ tr.acc-row:hover{background:var(--surface2);}
 .progress-bar-fill{height:100%;border-radius:99px;background:var(--accent);transition:width .3s;}
 .upload-status{font-size:12px;margin-top:.5rem;}
 .upload-status.ok{color:var(--ok);} .upload-status.err{color:var(--danger);}
+
+/* ── Purchase Planner Panel ─────────────────────────────── */
+#pp-panel{--pp-bg:#f7f7f5;--pp-panel:#ffffff;--pp-panel2:#f0f1ee;--pp-border:#dfe1dc;
+  --pp-text:#1c1e1a;--pp-muted:#6b6f68;--pp-accent:#0d8f5f;--pp-warn:#b8720a;--pp-danger:#c23a34;
+  --pp-mono:'SF Mono','Menlo','Consolas',monospace;
+  background:var(--pp-bg);border-radius:12px;padding:0;min-height:400px;}
+#pp-panel .pp-inner{max-width:1200px;margin:0 auto;padding:1.5rem 1.5rem 4rem;}
+#pp-panel .pp-loading{text-align:center;color:var(--pp-muted);padding:60px 0;font-size:14px;}
+#pp-panel .pp-statsbar{display:flex;gap:12px;margin:18px 0;flex-wrap:wrap;}
+#pp-panel .pp-stat{background:var(--pp-panel);border:1px solid var(--pp-border);border-radius:10px;padding:12px 16px;min-width:130px;}
+#pp-panel .pp-stat .num{font-size:22px;font-weight:700;font-family:var(--pp-mono);}
+#pp-panel .pp-stat .lbl{font-size:11px;color:var(--pp-muted);text-transform:uppercase;letter-spacing:.04em;margin-top:2px;}
+#pp-panel .pp-stat.danger .num{color:var(--pp-danger);}
+#pp-panel .pp-stat.warn .num{color:var(--pp-warn);}
+#pp-panel .pp-stat.accent .num{color:var(--pp-accent);}
+#pp-panel .pp-controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--pp-panel);
+  border:1px solid var(--pp-border);border-radius:10px;padding:12px 14px;margin-bottom:16px;}
+#pp-panel .pp-controls label{font-size:12px;color:var(--pp-muted);}
+#pp-panel .pp-search{background:var(--pp-panel2);border:1px solid var(--pp-border);border-radius:7px;
+  color:var(--pp-text);padding:7px 10px;font-size:13px;width:220px;}
+#pp-panel .pp-numInput{background:var(--pp-panel2);border:1px solid var(--pp-border);border-radius:7px;
+  color:var(--pp-text);padding:7px 8px;font-size:13px;width:64px;font-family:var(--pp-mono);}
+#pp-panel .pp-togglegrp{display:flex;background:var(--pp-panel2);border:1px solid var(--pp-border);border-radius:7px;overflow:hidden;}
+#pp-panel .pp-togglegrp button{background:transparent;border:none;color:var(--pp-muted);padding:7px 12px;font-size:12px;cursor:pointer;font-family:inherit;}
+#pp-panel .pp-togglegrp button.active{background:var(--pp-accent);color:#fff;font-weight:600;}
+#pp-panel .pp-chipgrp{display:flex;gap:8px;flex-wrap:wrap;}
+#pp-panel .pp-chip{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;font-size:12px;
+  border:1.5px solid var(--pp-border);background:var(--pp-panel2);color:var(--pp-muted);cursor:pointer;user-select:none;}
+#pp-panel .pp-chip .dot{width:8px;height:8px;border-radius:50%;background:#c7cac2;flex-shrink:0;}
+#pp-panel .pp-chip.chip-on{border-color:var(--pp-accent);background:#e9f7f0;color:#0a6b47;font-weight:600;}
+#pp-panel .pp-chip.chip-on .dot{background:var(--pp-accent);}
+#pp-panel .pp-bulkbar{display:none;align-items:center;gap:10px;background:#eef6f1;border:1px solid var(--pp-accent);
+  border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;}
+#pp-panel .pp-bulkbar.show{display:flex;flex-wrap:wrap;}
+#pp-panel .pp-bulkbar .count{font-weight:700;color:#0a6b47;}
+#pp-panel .pp-bulkbar button{font-size:12px;padding:6px 12px;border-radius:7px;border:1px solid var(--pp-border);
+  background:#fff;cursor:pointer;color:var(--pp-text);font-family:inherit;}
+#pp-panel .pp-bulkbar button:hover{background:var(--pp-panel2);}
+#pp-panel .pp-bulkbar button.clear-btn{color:var(--pp-muted);border:none;background:transparent;text-decoration:underline;}
+#pp-panel .override-tag{font-size:9px;color:var(--pp-muted);border:1px solid var(--pp-border);border-radius:4px;padding:0 4px;margin-left:4px;}
+#pp-panel table{width:100%;border-collapse:collapse;background:var(--pp-panel);border-radius:10px;overflow:hidden;border:1px solid var(--pp-border);}
+#pp-panel thead th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--pp-muted);
+  padding:10px 12px;border-bottom:1px solid var(--pp-border);cursor:pointer;user-select:none;position:sticky;top:0;background:var(--pp-panel);}
+#pp-panel thead th:hover{color:var(--pp-text);}
+#pp-panel tbody td{padding:9px 12px;border-bottom:1px solid var(--pp-border);font-size:13px;vertical-align:top;}
+#pp-panel tbody tr:hover{background:var(--pp-panel2);}
+#pp-panel .pname{font-weight:600;}
+#pp-panel .psup{color:var(--pp-muted);font-size:11px;margin-top:1px;}
+#pp-panel .num-cell{font-family:var(--pp-mono);text-align:right;}
+#pp-panel .pp-badge{display:inline-block;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:600;font-family:var(--pp-mono);}
+#pp-panel .pp-badge.crit{background:rgba(194,58,52,.12);color:var(--pp-danger);}
+#pp-panel .pp-badge.low{background:rgba(184,114,10,.12);color:var(--pp-warn);}
+#pp-panel .pp-badge.ok{background:rgba(13,143,95,.10);color:var(--pp-accent);}
+#pp-panel .pp-badge.none{background:rgba(107,111,104,.10);color:var(--pp-muted);}
+#pp-panel .buyqty{font-family:var(--pp-mono);font-weight:700;font-size:14px;}
+#pp-panel .buyqty.zero{color:var(--pp-muted);font-weight:400;}
+#pp-panel .pp-hint{color:var(--pp-muted);font-size:11.5px;margin-top:10px;line-height:1.5;}
+#pp-panel .pp-explainer{background:var(--pp-panel);border:1px solid var(--pp-border);border-radius:10px;padding:18px 20px;margin-top:18px;}
+#pp-panel .pp-explainer h3{margin:0 0 10px;font-size:14px;}
+#pp-panel .pp-explainer .formula{font-family:var(--pp-mono);font-size:13px;background:var(--pp-panel2);
+  border:1px solid var(--pp-border);border-radius:7px;padding:10px 14px;margin-bottom:12px;display:inline-block;}
+#pp-panel .pp-explainer ol{margin:0 0 12px;padding-left:20px;font-size:12.5px;color:var(--pp-muted);line-height:1.7;}
+#pp-panel .pp-explainer ol b{color:var(--pp-text);}
+#pp-panel .pp-explainer .example{font-family:var(--pp-mono);font-size:12.5px;background:var(--pp-panel2);
+  border:1px dashed var(--pp-border);border-radius:7px;padding:10px 14px;color:var(--pp-text);line-height:1.6;}
+#pp-panel .pp-sub{color:var(--pp-muted);font-size:13px;margin-bottom:16px;}
+#pp-panel .rowcheck{width:32px;text-align:center;}
 </style>
 </head>
 <body>
@@ -319,6 +386,7 @@ tr.acc-row:hover{background:var(--surface2);}
       <button class="page-tab active" onclick="setPageTab('inventory')">📦 庫存總覽</button>
       <button class="page-tab" onclick="setPageTab('reorder')">🔁 補貨清單</button>
       <button class="page-tab" onclick="setPageTab('orders')">🚚 待補貨記錄</button>
+      <button class="page-tab" onclick="setPageTab('planner')">📊 補貨規劃</button>
     </div>
 
     <!-- TAB: 庫存總覽 -->
@@ -418,6 +486,101 @@ tr.acc-row:hover{background:var(--surface2);}
       </div>
       <div id="orders-content"><div class="empty" style="text-align:center;padding:2.5rem;color:var(--text3);">切換到此頁即可載入補貨記錄</div></div>
     </div>
+
+    <!-- TAB: 補貨規劃 -->
+    <div id="panel-planner" class="page-panel">
+    <div id="pp-panel">
+      <div class="pp-inner">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;flex-wrap:wrap;gap:8px;">
+        <div>
+          <div style="font-size:15px;font-weight:700;">補貨規劃 · Purchase Planner</div>
+          <div class="pp-sub" id="pp-dateLabel">載入中...</div>
+        </div>
+        <button onclick="ppLoadData()" style="font-size:12px;padding:5px 12px;border:1px solid var(--pp-border);border-radius:8px;background:var(--pp-panel);cursor:pointer;color:var(--pp-muted);">🔄 重新整理</button>
+      </div>
+
+      <div id="pp-loadingMsg" class="pp-loading">點擊「重新整理」或切換到此頁即可載入資料</div>
+
+      <div id="pp-reportContent" style="display:none;">
+        <div class="pp-statsbar" id="pp-statsBar"></div>
+
+        <div class="pp-controls">
+          <input type="text" id="pp-search" class="pp-search" placeholder="搜尋品名 / SKU / 供應商...">
+          <label>銷售參考期間</label>
+          <div class="pp-togglegrp" id="pp-windowToggle">
+            <button data-v="m1">近1個月</button>
+            <button data-v="m2" class="active">近2個月</button>
+            <button data-v="m3">近3個月</button>
+            <button data-v="m6">近6個月</button>
+          </div>
+          <label>目標庫存週數</label>
+          <input type="number" id="pp-targetWeeks" class="pp-numInput" value="4" min="1" max="26" step="0.5">
+          <label>前置時間(天)</label>
+          <input type="number" id="pp-leadTimeDays" class="pp-numInput" value="4" min="0" max="30" step="0.5">
+          <label>最低採購量門檻</label>
+          <input type="number" id="pp-minOrderQty" class="pp-numInput" value="5" min="1" max="50" step="1">
+          <label>顯示</label>
+          <div class="pp-togglegrp" id="pp-urgencyToggle">
+            <button data-v="all" class="active">全部</button>
+            <button data-v="need">需補貨</button>
+          </div>
+        </div>
+
+        <div class="pp-controls" style="margin-top:-6px;">
+          <label style="margin-right:2px;">活躍程度（依近1個月銷售天數）</label>
+          <div class="pp-chipgrp" id="pp-categoryChips">
+            <div class="pp-chip chip-on" data-v="high"><span class="dot"></span>高度活躍(10+天)</div>
+            <div class="pp-chip chip-on" data-v="active"><span class="dot"></span>活躍(3-9天)</div>
+            <div class="pp-chip" data-v="occasional"><span class="dot"></span>偶爾(1-2天)</div>
+            <div class="pp-chip" data-v="inactive"><span class="dot"></span>不活躍(0天)</div>
+          </div>
+        </div>
+
+        <div class="pp-bulkbar" id="pp-bulkBar">
+          <span><span class="count" id="pp-bulkCount">0</span> 項已選取</span>
+          <span style="color:var(--pp-muted);">指派為：</span>
+          <button onclick="ppBulkAssign('high')">高度活躍</button>
+          <button onclick="ppBulkAssign('active')">活躍</button>
+          <button onclick="ppBulkAssign('occasional')">偶爾</button>
+          <button onclick="ppBulkAssign('inactive')">不活躍</button>
+          <button class="clear-btn" onclick="ppBulkClearOverride()">清除自訂分類</button>
+          <button class="clear-btn" onclick="ppClearSelection()">取消選取</button>
+        </div>
+
+        <table id="pp-tbl">
+          <thead>
+            <tr>
+              <th class="rowcheck"><input type="checkbox" id="pp-selectAllCheck" onclick="ppToggleSelectAll(this.checked)"></th>
+              <th data-k="product_name">商品名稱</th>
+              <th data-k="total_sold" class="num-cell">銷量</th>
+              <th data-k="quantity" class="num-cell">現有庫存</th>
+              <th data-k="weekly" class="num-cell">週均銷量</th>
+              <th data-k="weeksleft" class="num-cell">剩餘週數</th>
+              <th data-k="buyqty" class="num-cell">建議採購量</th>
+            </tr>
+          </thead>
+          <tbody id="pp-tbody"></tbody>
+        </table>
+
+        <div class="pp-hint" id="pp-hintBox"></div>
+
+        <div class="pp-explainer">
+          <h3>建議採購量怎麼算的？</h3>
+          <div class="formula">建議採購量 = 週均銷量 × (目標庫存週數 + 前置時間週數) × 1.10 − 現有庫存 − 已訂購未到貨數量</div>
+          <ol>
+            <li><b>週均銷量</b> = 選定期間內賣出的總數量 ÷ 該期間週數。</li>
+            <li><b>目標庫存週數</b>（預設 4 週）= 你希望隨時備有多少週的貨量。</li>
+            <li><b>前置時間週數</b>（預設 4 天 ≈ 0.6 週）= 下單到貨需要的時間。</li>
+            <li><b>× 1.10</b> = 應對促銷等突發銷售的安全緩衝。</li>
+            <li>減去<b>現有庫存</b>與<b>已訂購未到貨數量</b>，避免重複下單。</li>
+            <li><b>最低採購量門檻</b>：算出來的量若太小，視為冷門雜訊。</li>
+          </ol>
+          <div class="example" id="pp-liveExample"></div>
+        </div>
+      </div>
+      </div><!-- end pp-inner -->
+    </div>
+    </div><!-- end panel-planner -->
 
   </div><!-- end app -->
 </div><!-- end app-screen -->
@@ -2507,13 +2670,14 @@ let currentPageTab = 'inventory';
 function setPageTab(tab) {
   currentPageTab = tab;
   document.querySelectorAll('.page-tab').forEach((b,i) => {
-    const tabs = ['inventory','reorder','orders'];
+    const tabs = ['inventory','reorder','orders','planner'];
     b.classList.toggle('active', tabs[i] === tab);
   });
   document.querySelectorAll('.page-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-'+tab).classList.add('active');
   if(tab === 'reorder') renderReorderTab();
   if(tab === 'orders') renderOrdersTab();
+  if(tab === 'planner' && !ppDataLoaded) ppLoadData();
 }
 
 // ── Reorder Tab ───────────────────────────────────────────────
@@ -2948,6 +3112,241 @@ async function saveNewOrder() {
   closeNewOrderModal();
   setPageTab('orders');
 }
+// ── Purchase Planner ─────────────────────────────────────────
+const PP_WINDOW_LABELS = {m1:'近1個月', m2:'近2個月', m3:'近3個月', m6:'近6個月'};
+const PP_WINDOW_DAYS = {m1:30, m2:60, m3:90, m6:180};
+const PP_CATEGORY_LABELS = {high:'高度活躍', active:'活躍', occasional:'偶爾', inactive:'不活躍'};
+const PP_SURGE_BUFFER = 1.10;
+
+let ppItems = [];
+let ppOverrides = {};
+let ppSelectedRows = new Set();
+let ppDataLoaded = false;
+let ppState = {
+  search:'', urgency:'all', sortKey:'total_sold', sortDir:-1,
+  targetWeeks:4, minOrderQty:5, leadTimeDays:4, window:'m2',
+  categories: new Set(['high','active'])
+};
+
+function ppCategorize(daysM1){
+  if(daysM1 >= 10) return 'high';
+  if(daysM1 >= 3)  return 'active';
+  if(daysM1 >= 1)  return 'occasional';
+  return 'inactive';
+}
+
+function ppEsc(s){ const d=document.createElement('div'); d.textContent=String(s||''); return d.innerHTML; }
+
+async function ppLoadData(){
+  ppDataLoaded = true;
+  document.getElementById('pp-loadingMsg').style.display = 'block';
+  document.getElementById('pp-loadingMsg').textContent = '正在從 Supabase 載入即時資料...';
+  document.getElementById('pp-reportContent').style.display = 'none';
+  try {
+    const [invRes, archRes, byNameRes, byCodeRes, pendingRes, overrideRes] = await Promise.all([
+      sb.from('inventory').select('product_name,product_id,quantity,supplier_id'),
+      sb.from('archived_products').select('product_name'),
+      sb.rpc('get_sales_velocity_by_name'),
+      sb.rpc('get_sales_velocity_by_code'),
+      sb.rpc('get_pending_quantities'),
+      sb.from('activity_overrides').select('product_name,category'),
+    ]);
+    for(const r of [invRes, archRes, byNameRes, byCodeRes, pendingRes, overrideRes]){
+      if(r.error) throw r.error;
+    }
+    const archivedNames = new Set(archRes.data.map(r=>r.product_name));
+    const byName = {}; byNameRes.data.forEach(r=>{ byName[r.product_name]=r; });
+    const byCode = {}; byCodeRes.data.forEach(r=>{ byCode[r.product_code]=r; });
+    const pendingByName = {}; pendingRes.data.forEach(r=>{ pendingByName[r.product_name]=r.pending_qty; });
+    ppOverrides = {}; overrideRes.data.forEach(r=>{ ppOverrides[r.product_name]=r.category; });
+
+    ppItems = invRes.data
+      .filter(inv=>!archivedNames.has(inv.product_name))
+      .map(inv=>{
+        const sold = byName[inv.product_name] || byCode[inv.product_id] || null;
+        const daysM1 = sold ? (sold.days_m1||0) : 0;
+        const isOverridden = !!ppOverrides[inv.product_name];
+        return {
+          product_name: inv.product_name,
+          product_id: inv.product_id||'',
+          quantity: parseFloat(inv.quantity)||0,
+          pendingQty: parseFloat(pendingByName[inv.product_name])||0,
+          location: inv.supplier_id||'',
+          sold: sold ? {m1:sold.sold_m1, m2:sold.sold_m2, m3:sold.sold_m3, m6:sold.sold_m6} : {m1:null,m2:null,m3:null,m6:null},
+          daysM1, category: isOverridden ? ppOverrides[inv.product_name] : ppCategorize(daysM1),
+          isOverridden,
+        };
+      });
+
+    document.getElementById('pp-dateLabel').textContent =
+      `即時資料 · 最後載入：${new Date().toLocaleString('zh-TW')} · 庫存 ${invRes.data.length} 項（已排除 ${archivedNames.size} 項封存商品）`;
+    document.getElementById('pp-loadingMsg').style.display = 'none';
+    document.getElementById('pp-reportContent').style.display = 'block';
+    ppRender();
+  } catch(e) {
+    document.getElementById('pp-loadingMsg').textContent = '載入失敗：'+(e.message||e);
+    console.error(e);
+  }
+}
+
+function ppComputed(){
+  const weeksSpan = PP_WINDOW_DAYS[ppState.window]/7;
+  const leadTimeWeeks = (ppState.leadTimeDays||0)/7;
+  return ppItems.map(it=>{
+    const sold = it.sold ? it.sold[ppState.window] : null;
+    const weekly = sold ? (sold/weeksSpan) : null;
+    const weeksleft = (weekly && weekly>0) ? (it.quantity/weekly) : (it.quantity>0 ? Infinity : (weekly===null ? null : 0));
+    let rawNeed = 0;
+    if(weekly && weekly>0){
+      const targetStock = weekly*(ppState.targetWeeks+leadTimeWeeks)*PP_SURGE_BUFFER;
+      rawNeed = Math.max(0, Math.ceil(targetStock - it.quantity - it.pendingQty));
+    }
+    const buyqty = rawNeed >= ppState.minOrderQty ? rawNeed : 0;
+    const belowThreshold = rawNeed > 0 && rawNeed < ppState.minOrderQty;
+    return {...it, total_sold:sold, weekly, weeksleft, buyqty, rawNeed, belowThreshold};
+  });
+}
+
+function ppUrgencyBadge(row){
+  if(row.weekly===null) return '<span class="pp-badge none">無銷售紀錄</span>';
+  if(row.weeksleft===Infinity) return '<span class="pp-badge ok">無銷量消耗</span>';
+  if(row.weeksleft < 1.5) return `<span class="pp-badge crit">${row.weeksleft.toFixed(1)} 週</span>`;
+  if(row.weeksleft < ppState.targetWeeks) return `<span class="pp-badge low">${row.weeksleft.toFixed(1)} 週</span>`;
+  return `<span class="pp-badge ok">${row.weeksleft.toFixed(1)} 週</span>`;
+}
+
+function ppRender(){
+  let rows = ppComputed();
+  rows = rows.filter(r=>r.total_sold && r.total_sold>0);
+  rows = rows.filter(r=>ppState.categories.has(r.category));
+  if(ppState.urgency==='need') rows = rows.filter(r=>r.buyqty>0);
+  if(ppState.search){
+    const s=ppState.search.toLowerCase();
+    rows = rows.filter(r=>r.product_name.toLowerCase().includes(s)||r.product_id.toLowerCase().includes(s)||(r.location||'').toLowerCase().includes(s));
+  }
+  rows.sort((a,b)=>{
+    let av, bv;
+    if(ppState.sortKey==='product_name'){return ppState.sortDir*a.product_name.localeCompare(b.product_name);}
+    if(ppState.sortKey==='quantity'){av=a.quantity;bv=b.quantity;}
+    else if(ppState.sortKey==='weekly'){av=a.weekly??-1;bv=b.weekly??-1;}
+    else if(ppState.sortKey==='weeksleft'){av=a.weeksleft===Infinity?1e9:(a.weeksleft??-1);bv=b.weeksleft===Infinity?1e9:(b.weeksleft??-1);}
+    else if(ppState.sortKey==='total_sold'){av=a.total_sold??-1;bv=b.total_sold??-1;}
+    else{av=a.buyqty;bv=b.buyqty;}
+    return ppState.sortDir*(av-bv);
+  });
+  const allRows = ppComputed();
+  const stats = {
+    crit: rows.filter(r=>r.weekly&&r.weeksleft<1.5).length,
+    low: rows.filter(r=>r.weekly&&r.weeksleft>=1.5&&r.weeksleft<ppState.targetWeeks).length,
+    need: allRows.filter(r=>r.buyqty>0).length,
+    totalBuyUnits: allRows.reduce((s,r)=>s+r.buyqty,0)
+  };
+  document.getElementById('pp-statsBar').innerHTML = `
+    <div class="pp-stat danger"><div class="num">${stats.crit}</div><div class="lbl">急需補貨 (&lt;1.5週)</div></div>
+    <div class="pp-stat warn"><div class="num">${stats.low}</div><div class="lbl">偏低庫存</div></div>
+    <div class="pp-stat accent"><div class="num">${stats.need}</div><div class="lbl">建議採購品項</div></div>
+    <div class="pp-stat"><div class="num">${stats.totalBuyUnits}</div><div class="lbl">建議採購總件數</div></div>`;
+
+  document.getElementById('pp-tbody').innerHTML = rows.map(r=>`
+    <tr>
+      <td class="rowcheck"><input type="checkbox" class="pp-rowSelect" data-name="${ppEsc(r.product_name)}" ${ppSelectedRows.has(r.product_name)?'checked':''} onclick="ppToggleRowSelect('${ppEsc(r.product_name).replace(/'/g,"\\'")}',this.checked)"></td>
+      <td>
+        <div class="pname">${ppEsc(r.product_name)} <span class="pp-badge ${r.category==='high'?'ok':r.category==='active'?'low':'none'}" style="font-size:10px;">${PP_CATEGORY_LABELS[r.category]}</span>${r.isOverridden?'<span class="override-tag">手動</span>':''}</div>
+        <div class="psup">SKU: ${ppEsc(r.product_id)}${r.location?' · 供應商: '+ppEsc(r.location):''} · 近1個月售出天數: ${r.daysM1}${r.pendingQty>0?` · <span style="color:var(--pp-accent);">已訂購未到貨: ${r.pendingQty}</span>`:''}</div>
+      </td>
+      <td class="num-cell" style="font-weight:600;">${r.total_sold}</td>
+      <td class="num-cell">${r.quantity%1===0?r.quantity:r.quantity.toFixed(1)}</td>
+      <td class="num-cell">${r.weekly!==null?r.weekly.toFixed(1):'–'}</td>
+      <td class="num-cell">${ppUrgencyBadge(r)}</td>
+      <td class="num-cell">${r.buyqty>0?`<span class="buyqty">${r.buyqty}</span>`:r.belowThreshold?`<span class="buyqty zero" title="低於最低採購量門檻">&lt; 門檻 (${r.rawNeed})</span>`:`<span class="buyqty zero">–</span>`}</td>
+    </tr>`).join('');
+
+  ppUpdateBulkBar();
+  document.getElementById('pp-hintBox').textContent = `目前使用「${PP_WINDOW_LABELS[ppState.window]}」的銷售資料計算週均銷量。`;
+  const example = rows.find(r=>r.buyqty>0)||rows[0];
+  if(example && example.weekly){
+    const w=PP_WINDOW_DAYS[ppState.window]/7;
+    const lw=(ppState.leadTimeDays||0)/7;
+    const ts=example.weekly*(ppState.targetWeeks+lw)*PP_SURGE_BUFFER;
+    document.getElementById('pp-liveExample').innerHTML =
+      `範例：<b>${ppEsc(example.product_name)}</b><br>`+
+      `${PP_WINDOW_LABELS[ppState.window]}賣了 ${example.total_sold} 件 ÷ ${w.toFixed(1)} 週 = 週均銷量 ${example.weekly.toFixed(2)} 件/週<br>`+
+      `${example.weekly.toFixed(2)} × (目標${ppState.targetWeeks}週 + 前置${lw.toFixed(2)}週) × 1.10 = 應備 ${ts.toFixed(1)} 件<br>`+
+      `${ts.toFixed(1)} − 庫存 ${example.quantity} − 已訂 ${example.pendingQty} = <b>建議採購 ${example.rawNeed} 件</b>`+
+      (example.belowThreshold?` （低於門檻 ${ppState.minOrderQty}，不列入正式建議）`:'');
+  }
+}
+
+function ppToggleRowSelect(name, checked){
+  if(checked) ppSelectedRows.add(name); else ppSelectedRows.delete(name);
+  ppUpdateBulkBar();
+}
+function ppToggleSelectAll(checked){
+  document.querySelectorAll('.pp-rowSelect').forEach(cb=>{
+    cb.checked=checked;
+    if(checked) ppSelectedRows.add(cb.dataset.name); else ppSelectedRows.delete(cb.dataset.name);
+  });
+  ppUpdateBulkBar();
+}
+function ppClearSelection(){
+  ppSelectedRows.clear();
+  document.querySelectorAll('.pp-rowSelect').forEach(cb=>cb.checked=false);
+  const sa=document.getElementById('pp-selectAllCheck'); if(sa) sa.checked=false;
+  ppUpdateBulkBar();
+}
+function ppUpdateBulkBar(){
+  const bar=document.getElementById('pp-bulkBar');
+  const count=document.getElementById('pp-bulkCount');
+  if(!bar) return;
+  if(ppSelectedRows.size>0){bar.classList.add('show');count.textContent=ppSelectedRows.size;}
+  else bar.classList.remove('show');
+}
+async function ppBulkAssign(category){
+  if(!ppSelectedRows.size) return;
+  const names=Array.from(ppSelectedRows);
+  const rows=names.map(n=>({product_name:n, category, updated_at:new Date().toISOString()}));
+  const {error}=await sb.from('activity_overrides').upsert(rows,{onConflict:'product_name'});
+  if(error){alert('儲存失敗：'+error.message);return;}
+  names.forEach(n=>{ppOverrides[n]=category;});
+  ppItems.forEach(it=>{if(ppSelectedRows.has(it.product_name)){it.category=category;it.isOverridden=true;}});
+  ppClearSelection(); ppRender();
+}
+async function ppBulkClearOverride(){
+  if(!ppSelectedRows.size) return;
+  const names=Array.from(ppSelectedRows);
+  const {error}=await sb.from('activity_overrides').delete().in('product_name',names);
+  if(error){alert('清除失敗：'+error.message);return;}
+  names.forEach(n=>{delete ppOverrides[n];});
+  ppItems.forEach(it=>{if(ppSelectedRows.has(it.product_name)){it.category=ppCategorize(it.daysM1);it.isOverridden=false;}});
+  ppClearSelection(); ppRender();
+}
+
+// Event listeners — attached after DOM ready
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.getElementById('pp-search')?.addEventListener('input', e=>{ppState.search=e.target.value;ppRender();});
+  document.getElementById('pp-targetWeeks')?.addEventListener('input', e=>{ppState.targetWeeks=parseFloat(e.target.value)||4;ppRender();});
+  document.getElementById('pp-leadTimeDays')?.addEventListener('input', e=>{ppState.leadTimeDays=parseFloat(e.target.value)||0;ppRender();});
+  document.getElementById('pp-minOrderQty')?.addEventListener('input', e=>{ppState.minOrderQty=parseInt(e.target.value)||1;ppRender();});
+  document.querySelectorAll('#pp-windowToggle button').forEach(b=>b.addEventListener('click',()=>{
+    document.querySelectorAll('#pp-windowToggle button').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active'); ppState.window=b.dataset.v; ppRender();
+  }));
+  document.querySelectorAll('#pp-urgencyToggle button').forEach(b=>b.addEventListener('click',()=>{
+    document.querySelectorAll('#pp-urgencyToggle button').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active'); ppState.urgency=b.dataset.v; ppRender();
+  }));
+  document.querySelectorAll('#pp-categoryChips .pp-chip').forEach(chip=>chip.addEventListener('click',()=>{
+    const v=chip.dataset.v;
+    if(ppState.categories.has(v)){ppState.categories.delete(v);chip.classList.remove('chip-on');}
+    else{ppState.categories.add(v);chip.classList.add('chip-on');}
+    ppRender();
+  }));
+  document.querySelectorAll('#pp-tbl thead th').forEach(th=>th.addEventListener('click',()=>{
+    const k=th.dataset.k; if(!k) return;
+    if(ppState.sortKey===k) ppState.sortDir*=-1; else{ppState.sortKey=k;ppState.sortDir=1;}
+    ppRender();
+  }));
+});
 </script>
 
 <!-- New Order Modal -->
