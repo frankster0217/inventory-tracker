@@ -183,8 +183,9 @@ tr.acc-row:hover{background:var(--surface2);}
 .form-input:focus{border-color:var(--accent);}
 
 /* Top-level page tabs */
-.page-tabs{display:flex;gap:0;border-bottom:2px solid var(--border-strong);margin-bottom:1.5rem;}
+.page-tabs{display:flex;gap:0;border-bottom:2px solid var(--border-strong);margin-bottom:1.5rem;flex-wrap:wrap;}
 .page-tab{padding:9px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:var(--text2);border-bottom:3px solid transparent;margin-bottom:-2px;font-family:inherit;transition:all .12s;white-space:nowrap;}
+@media(max-width:480px){.page-tab{padding:8px 14px;font-size:12px;}}
 .page-tab:hover{color:var(--text);}
 .page-tab.active{color:var(--text);border-bottom-color:var(--accent);}
 .page-panel{display:none;}
@@ -311,6 +312,11 @@ tr.acc-row:hover{background:var(--surface2);}
 #pp-panel table{width:100%;border-collapse:collapse;background:var(--pp-panel);border-radius:10px;overflow:hidden;border:1px solid var(--pp-border);}
 #pp-panel thead th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--pp-muted);
   padding:10px 12px;border-bottom:1px solid var(--pp-border);cursor:pointer;user-select:none;position:sticky;top:0;background:var(--pp-panel);}
+#pp-panel thead th:nth-child(1){position:sticky;left:0;z-index:3;background:var(--pp-panel);}
+#pp-panel thead th:nth-child(2){position:sticky;left:32px;z-index:3;background:var(--pp-panel);min-width:180px;}
+#pp-panel tbody td:nth-child(1){position:sticky;left:0;z-index:1;background:var(--pp-panel);}
+#pp-panel tbody td:nth-child(2){position:sticky;left:32px;z-index:1;background:var(--pp-panel);min-width:180px;}
+#pp-panel tbody tr:hover td{background:var(--pp-panel2);}
 #pp-panel thead th:hover{color:var(--pp-text);}
 #pp-panel tbody td{padding:9px 12px;border-bottom:1px solid var(--pp-border);font-size:13px;vertical-align:top;}
 #pp-panel tbody tr:hover{background:var(--pp-panel2);}
@@ -547,7 +553,7 @@ tr.acc-row:hover{background:var(--surface2);}
           <button class="clear-btn" onclick="ppClearSelection()">取消選取</button>
         </div>
 
-        <table id="pp-tbl">
+        </div><div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table id="pp-tbl" style="min-width:700px;">
           <thead>
             <tr>
               <th class="rowcheck"><input type="checkbox" id="pp-selectAllCheck" onclick="ppToggleSelectAll(this.checked)"></th>
@@ -560,7 +566,7 @@ tr.acc-row:hover{background:var(--surface2);}
             </tr>
           </thead>
           <tbody id="pp-tbody"></tbody>
-        </table>
+        </table></div>
 
         <div class="pp-hint" id="pp-hintBox"></div>
 
