@@ -3221,6 +3221,38 @@ function ppUrgencyBadge(row){
   return `<span class="pp-badge ok">${row.weeksleft.toFixed(1)} 週</span>`;
 }
 
+function ppRowHtml(r){
+  return `<tr>
+    <td class="rowcheck"><input type="checkbox" class="pp-rowSelect" data-name="${ppEsc(r.product_name)}" ${ppSelectedRows.has(r.product_name)?'checked':''} onclick="ppToggleRowSelect('${ppEsc(r.product_name).replace(/'/g,"\\'")}',this.checked)"></td>
+    <td>
+      <div class="pname">${ppEsc(r.product_name)} <span class="pp-badge ${r.category==='high'?'ok':r.category==='active'?'low':'none'}" style="font-size:10px;">${PP_CATEGORY_LABELS[r.category]}</span>${r.isOverridden?'<span class="override-tag">手動</span>':''}</div>
+      <div class="psup">SKU: ${ppEsc(r.product_id)} · 近1個月售出天數: ${r.daysM1}${r.pendingQty>0?` · <span style="color:var(--pp-accent);">已訂購未到貨: ${r.pendingQty}</span>`:''}</div>
+    </td>
+    <td class="num-cell" style="font-weight:600;">${r.total_sold}</td>
+    <td class="num-cell">${r.quantity%1===0?r.quantity:r.quantity.toFixed(1)}</td>
+    <td class="num-cell">${r.weekly!==null?r.weekly.toFixed(1):'–'}</td>
+    <td class="num-cell">${ppUrgencyBadge(r)}</td>
+    <td class="num-cell">${r.buyqty>0?`<span class="buyqty">${r.buyqty}</span>`:r.belowThreshold?`<span class="buyqty zero" title="低於最低採購量門檻">&lt; 門檻 (${r.rawNeed})</span>`:`<span class="buyqty zero">–</span>`}</td>
+  </tr>`;
+}
+
+function ppToggleSupplier(sid){
+  const body=document.getElementById('pp-sup-body-'+sid);
+  const arr=document.getElementById('pp-sup-arr-'+sid);
+  if(!body)return;
+  const open=body.style.display==='none';
+  body.style.display=open?'':'none';
+  if(arr)arr.style.transform=open?'rotate(90deg)':'';
+}
+function ppExpandAll(open){
+  document.querySelectorAll('[id^="pp-sup-body-"]').forEach(b=>{
+    const sid=b.id.replace('pp-sup-body-','');
+    b.style.display=open?'':'none';
+    const arr=document.getElementById('pp-sup-arr-'+sid);
+    if(arr)arr.style.transform=open?'rotate(90deg)':'';
+  });
+}
+
 function ppRender(){
   let rows = ppComputed();
   rows = rows.filter(r=>r.total_sold && r.total_sold>0);
@@ -3230,20 +3262,20 @@ function ppRender(){
     const s=ppState.search.toLowerCase();
     rows = rows.filter(r=>r.product_name.toLowerCase().includes(s)||r.product_id.toLowerCase().includes(s)||(r.location||'').toLowerCase().includes(s));
   }
+
+  // Sort by urgency within each group
   rows.sort((a,b)=>{
-    let av, bv;
-    if(ppState.sortKey==='product_name'){return ppState.sortDir*a.product_name.localeCompare(b.product_name);}
-    if(ppState.sortKey==='quantity'){av=a.quantity;bv=b.quantity;}
-    else if(ppState.sortKey==='weekly'){av=a.weekly??-1;bv=b.weekly??-1;}
-    else if(ppState.sortKey==='weeksleft'){av=a.weeksleft===Infinity?1e9:(a.weeksleft??-1);bv=b.weeksleft===Infinity?1e9:(b.weeksleft??-1);}
-    else if(ppState.sortKey==='total_sold'){av=a.total_sold??-1;bv=b.total_sold??-1;}
-    else{av=a.buyqty;bv=b.buyqty;}
-    return ppState.sortDir*(av-bv);
+    const aw=a.weeksleft===Infinity?1e9:(a.weeksleft??1e8);
+    const bw=b.weeksleft===Infinity?1e9:(b.weeksleft??1e8);
+    if(a.buyqty>0 && b.buyqty===0) return -1;
+    if(b.buyqty>0 && a.buyqty===0) return 1;
+    return aw-bw;
   });
+
   const allRows = ppComputed();
   const stats = {
-    crit: rows.filter(r=>r.weekly&&r.weeksleft<1.5).length,
-    low: rows.filter(r=>r.weekly&&r.weeksleft>=1.5&&r.weeksleft<ppState.targetWeeks).length,
+    crit: allRows.filter(r=>r.weekly&&r.weeksleft<1.5).length,
+    low: allRows.filter(r=>r.weekly&&r.weeksleft>=1.5&&r.weeksleft<ppState.targetWeeks).length,
     need: allRows.filter(r=>r.buyqty>0).length,
     totalBuyUnits: allRows.reduce((s,r)=>s+r.buyqty,0)
   };
@@ -3253,22 +3285,90 @@ function ppRender(){
     <div class="pp-stat accent"><div class="num">${stats.need}</div><div class="lbl">建議採購品項</div></div>
     <div class="pp-stat"><div class="num">${stats.totalBuyUnits}</div><div class="lbl">建議採購總件數</div></div>`;
 
-  document.getElementById('pp-tbody').innerHTML = rows.map(r=>`
-    <tr>
-      <td class="rowcheck"><input type="checkbox" class="pp-rowSelect" data-name="${ppEsc(r.product_name)}" ${ppSelectedRows.has(r.product_name)?'checked':''} onclick="ppToggleRowSelect('${ppEsc(r.product_name).replace(/'/g,"\\'")}',this.checked)"></td>
-      <td>
-        <div class="pname">${ppEsc(r.product_name)} <span class="pp-badge ${r.category==='high'?'ok':r.category==='active'?'low':'none'}" style="font-size:10px;">${PP_CATEGORY_LABELS[r.category]}</span>${r.isOverridden?'<span class="override-tag">手動</span>':''}</div>
-        <div class="psup">SKU: ${ppEsc(r.product_id)}${r.location?' · 供應商: '+ppEsc(r.location):''} · 近1個月售出天數: ${r.daysM1}${r.pendingQty>0?` · <span style="color:var(--pp-accent);">已訂購未到貨: ${r.pendingQty}</span>`:''}</div>
-      </td>
-      <td class="num-cell" style="font-weight:600;">${r.total_sold}</td>
-      <td class="num-cell">${r.quantity%1===0?r.quantity:r.quantity.toFixed(1)}</td>
-      <td class="num-cell">${r.weekly!==null?r.weekly.toFixed(1):'–'}</td>
-      <td class="num-cell">${ppUrgencyBadge(r)}</td>
-      <td class="num-cell">${r.buyqty>0?`<span class="buyqty">${r.buyqty}</span>`:r.belowThreshold?`<span class="buyqty zero" title="低於最低採購量門檻">&lt; 門檻 (${r.rawNeed})</span>`:`<span class="buyqty zero">–</span>`}</td>
-    </tr>`).join('');
+  // Group by supplier
+  const supGroups={};
+  rows.forEach(r=>{
+    const sid=r.location||'uncat';
+    if(!supGroups[sid])supGroups[sid]=[];
+    supGroups[sid].push(r);
+  });
+
+  // Order suppliers by most urgent (lowest min weeksleft)
+  const supOrder=Object.keys(supGroups).sort((a,b)=>{
+    const minW=arr=>Math.min(...arr.map(r=>r.weeksleft===Infinity?1e9:(r.weeksleft??1e8)));
+    return minW(supGroups[a])-minW(supGroups[b]);
+  });
+
+  const tableHeader=`<table style="width:100%;border-collapse:collapse;background:var(--pp-panel);">
+    <thead><tr>
+      <th class="rowcheck" style="background:var(--pp-panel);"><input type="checkbox"></th>
+      <th style="background:var(--pp-panel);">商品名稱</th>
+      <th class="num-cell" style="background:var(--pp-panel);">銷量</th>
+      <th class="num-cell" style="background:var(--pp-panel);">現有庫存</th>
+      <th class="num-cell" style="background:var(--pp-panel);">週均銷量</th>
+      <th class="num-cell" style="background:var(--pp-panel);">剩餘週數</th>
+      <th class="num-cell" style="background:var(--pp-panel);">建議採購量</th>
+    </tr></thead>`;
+
+  const html = supOrder.map(sid=>{
+    const srows=supGroups[sid];
+    const sup=supplierRules.find(s=>s.supplier_id===sid);
+    const supName=sup?.name||(sid==='uncat'?'未分類':sid);
+    const critCount=srows.filter(r=>r.weekly&&r.weeksleft<1.5).length;
+    const needCount=srows.filter(r=>r.buyqty>0).length;
+    const totalBuy=srows.reduce((s,r)=>s+r.buyqty,0);
+    const hasCrit=critCount>0;
+    const safeSid=sid.replace(/[^a-zA-Z0-9]/g,'_');
+
+    const badges=[
+      critCount>0?`<span style="font-size:12px;font-weight:700;color:#c23a34;background:#fef2f2;border:1.5px solid #fecaca;border-radius:99px;padding:3px 10px;">急需 ${critCount}</span>`:'',
+      needCount>0?`<span style="font-size:12px;font-weight:700;color:#b8720a;background:#fff7ed;border:1.5px solid #fed7aa;border-radius:99px;padding:3px 10px;">需補 ${needCount} · ${totalBuy}件</span>`:'',
+    ].filter(Boolean).join(' ');
+
+    return `<div style="margin-bottom:8px;border-radius:12px;overflow:hidden;border:1.5px solid ${hasCrit?'#fecaca':'var(--pp-border)'};box-shadow:0 1px 3px rgba(0,0,0,.06);">
+      <div onclick="ppToggleSupplier('${safeSid}')" style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;background:${hasCrit?'#fff8f8':'var(--pp-panel)'};cursor:pointer;" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span id="pp-sup-arr-${safeSid}" style="font-size:10px;color:var(--pp-muted);display:inline-block;transition:transform .2s;">▶</span>
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--pp-text);">${ppEsc(supName)}</div>
+            <div style="font-size:11px;color:var(--pp-muted);margin-top:1px;">${srows.length} 項</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:5px;">${badges}</div>
+      </div>
+      <div id="pp-sup-body-${safeSid}" style="display:none;border-top:1px solid ${hasCrit?'#fecaca':'var(--pp-border)'};overflow-x:auto;-webkit-overflow-scrolling:touch;">
+        ${tableHeader}<tbody>${srows.map(r=>ppRowHtml(r)).join('')}</tbody></table>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Replace table with supplier groups
+  const tbl=document.getElementById('pp-tbl');
+  if(tbl){
+    // Hide original table, show groups in a container
+    tbl.style.display='none';
+    let groupEl=document.getElementById('pp-sup-groups');
+    if(!groupEl){
+      groupEl=document.createElement('div');
+      groupEl.id='pp-sup-groups';
+      tbl.parentNode.insertBefore(groupEl,tbl);
+    }
+    groupEl.innerHTML=`<div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:8px;">
+      <button onclick="ppExpandAll(true)" style="font-size:11px;padding:3px 10px;border:1px solid var(--pp-border);border-radius:6px;background:var(--pp-panel);cursor:pointer;color:var(--pp-muted);">全部展開</button>
+      <button onclick="ppExpandAll(false)" style="font-size:11px;padding:3px 10px;border:1px solid var(--pp-border);border-radius:6px;background:var(--pp-panel);cursor:pointer;color:var(--pp-muted);">全部收合</button>
+    </div>`+html;
+
+    // Auto-expand ALL supplier sections
+    setTimeout(()=>{
+      supOrder.forEach(sid=>{
+        const safeSid=sid.replace(/[^a-zA-Z0-9]/g,'_');
+        ppToggleSupplier(safeSid);
+      });
+    },50);
+  }
 
   ppUpdateBulkBar();
-  document.getElementById('pp-hintBox').textContent = `目前使用「${PP_WINDOW_LABELS[ppState.window]}」的銷售資料計算週均銷量。`;
+  document.getElementById('pp-hintBox').textContent = `目前使用「${PP_WINDOW_LABELS[ppState.window]}」的銷售資料計算週均銷量，依供應商分組顯示。`;
   const example = rows.find(r=>r.buyqty>0)||rows[0];
   if(example && example.weekly){
     const w=PP_WINDOW_DAYS[ppState.window]/7;
