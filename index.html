@@ -3223,8 +3223,8 @@ function ppUrgencyBadge(row){
 
 function ppRowHtml(r){
   return `<tr>
-    <td class="rowcheck"><input type="checkbox" class="pp-rowSelect" data-name="${ppEsc(r.product_name)}" ${ppSelectedRows.has(r.product_name)?'checked':''} onclick="ppToggleRowSelect('${ppEsc(r.product_name).replace(/'/g,"\\'")}',this.checked)"></td>
-    <td>
+    <td class="rowcheck" style="position:sticky;left:0;z-index:1;background:var(--pp-panel);width:32px;"><input type="checkbox" class="pp-rowSelect" data-name="${ppEsc(r.product_name)}" ${ppSelectedRows.has(r.product_name)?'checked':''} onclick="ppToggleRowSelect('${ppEsc(r.product_name).replace(/'/g,"\\'")}',this.checked)"></td>
+    <td style="position:sticky;left:32px;z-index:1;background:var(--pp-panel);min-width:160px;">
       <div class="pname">${ppEsc(r.product_name)} <span class="pp-badge ${r.category==='high'?'ok':r.category==='active'?'low':'none'}" style="font-size:10px;">${PP_CATEGORY_LABELS[r.category]}</span>${r.isOverridden?'<span class="override-tag">手動</span>':''}</div>
       <div class="psup">SKU: ${ppEsc(r.product_id)} · 近1個月售出天數: ${r.daysM1}${r.pendingQty>0?` · <span style="color:var(--pp-accent);">已訂購未到貨: ${r.pendingQty}</span>`:''}</div>
     </td>
@@ -3299,15 +3299,15 @@ function ppRender(){
     return minW(supGroups[a])-minW(supGroups[b]);
   });
 
-  const tableHeader=`<table style="width:100%;border-collapse:collapse;background:var(--pp-panel);">
+  const tableHeader=`<table style="width:100%;min-width:620px;border-collapse:collapse;background:var(--pp-panel);">
     <thead><tr>
-      <th class="rowcheck" style="background:var(--pp-panel);"><input type="checkbox"></th>
-      <th style="background:var(--pp-panel);">商品名稱</th>
-      <th class="num-cell" style="background:var(--pp-panel);">銷量</th>
-      <th class="num-cell" style="background:var(--pp-panel);">現有庫存</th>
-      <th class="num-cell" style="background:var(--pp-panel);">週均銷量</th>
-      <th class="num-cell" style="background:var(--pp-panel);">剩餘週數</th>
-      <th class="num-cell" style="background:var(--pp-panel);">建議採購量</th>
+      <th class="rowcheck" style="background:var(--pp-panel);position:sticky;left:0;z-index:3;width:32px;"><input type="checkbox"></th>
+      <th style="background:var(--pp-panel);position:sticky;left:32px;z-index:3;min-width:160px;">商品名稱</th>
+      <th class="num-cell" style="background:var(--pp-panel);min-width:60px;">銷量</th>
+      <th class="num-cell" style="background:var(--pp-panel);min-width:70px;">現有庫存</th>
+      <th class="num-cell" style="background:var(--pp-panel);min-width:70px;">週均銷量</th>
+      <th class="num-cell" style="background:var(--pp-panel);min-width:80px;">剩餘週數</th>
+      <th class="num-cell" style="background:var(--pp-panel);min-width:80px;">建議採購量</th>
     </tr></thead>`;
 
   const html = supOrder.map(sid=>{
