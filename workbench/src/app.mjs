@@ -1,6 +1,8 @@
 import {buildWorkbench,buildTrackerPlan,buildReport,groupBySupplier,PAID,UNPAID} from './core.mjs';
 import {SUPABASE_URL,PUBLIC_KEY,loadSnapshot,saveSkuPreferences} from './data.mjs';
 const $=id=>document.getElementById(id);
+const refreshButton=$('refresh');
+const refreshLabel=refreshButton.textContent;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=v=>v===null||v===undefined?'—':Number(v).toLocaleString('zh-TW',{maximumFractionDigits:1});
 const stamp=value=>value?new Date(value).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}):'尚未確認';
@@ -303,8 +305,9 @@ function updateModel() {
   render();
 }
 
-async function reload(){
- $('refresh').disabled=true;
+async function reload({manual=false}={}){
+ refreshButton.disabled=true;
+ refreshButton.textContent='更新中…';
  const modeBadge=$('preview-badge');
  try{
    if(isPreview){const r=await fetch('/__preview.json',{cache:'no-store'});if(!r.ok)throw new Error('找不到本機預覽資料');snapshot=await r.json();}
@@ -314,8 +317,9 @@ async function reload(){
      modeBadge.textContent='即時連線';
      modeBadge.hidden=false;
    }
+   if(manual)toast(snapshot.tracker?.error ? '補貨資料未能更新' : isPreview ? '已重新載入快照' : '資料已更新');
  }catch(error){if(!isPreview)modeBadge.hidden=true;model=null;$('copy-report').disabled=true;$('sourcebar').innerHTML=badge('更新失敗 · 暫停採購建議','red');$('main-content').innerHTML=empty('資料未能完整讀取',error.message);toast('讀取失敗；沒有把缺少資料當成零。');}
- finally{$('refresh').disabled=false;}
+ finally{refreshButton.textContent=refreshLabel;refreshButton.disabled=false;}
 }
 document.addEventListener('click',async event=>{
  const b=event.target.closest('button,a');if(!b)return;
@@ -346,7 +350,7 @@ document.addEventListener('change',async event=>{
 });
 export function parseCsv(text){const rows=[];let row=[],field='',quoted=false;for(let i=0;i<text.length;i++){const c=text[i];if(c==='"'){if(quoted&&text[i+1]==='"'){field+='"';i++;}else quoted=!quoted;}else if(c===','&&!quoted){row.push(field);field='';}else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&text[i+1]==='\n')i++;row.push(field);if(row.some(x=>x!==''))rows.push(row);row=[];field='';}else field+=c;}if(field||row.length){row.push(field);rows.push(row);}if(quoted)throw new Error('CSV 引號不完整');return rows;}
 $('close-dialog').onclick=()=>$('product-dialog').close();
-$('refresh').onclick=reload;
+refreshButton.onclick=()=>reload({manual:true});
 // Poll only the live, visible workspace. Do not replace an open edit dialog.
 function refreshIfDue(){if(!isPreview&&client&&!$('shell').hidden&&document.visibilityState==='visible'&&!$('product-dialog').open&&!$('refresh').disabled&&Date.now()-lastLoadAt>60000)void reload();}
 if(!isPreview){setInterval(refreshIfDue,5*60*1000);window.addEventListener('focus',refreshIfDue);document.addEventListener('visibilitychange',refreshIfDue);}
