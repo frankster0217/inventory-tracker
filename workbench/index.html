@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light"><title>採購與到貨工作台 · PORTO / VOICity</title>
+  <meta name="theme-color" content="#17634d">
+  <meta name="apple-mobile-web-app-title" content="庫存工作台">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="assets/workbench-icon-180.png">
+  <link rel="stylesheet" href="assets/workbench.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.js"></script>
+</head>
+<body>
+  <section id="login" class="login" hidden><form id="login-form" class="login-card">
+    <span class="brand-mark">P</span><h1>登入庫存工作台</h1>
+    <label>Email<input id="email" type="email" autocomplete="username" required></label>
+    <label>密碼<input id="password" type="password" autocomplete="current-password" required></label>
+    <button class="button primary" type="submit">登入</button><p id="login-error" role="alert"></p>
+  </form></section>
+  <div id="shell" class="shell" hidden>
+    <aside class="sidebar">
+      <a class="brand" href="#today" data-tab="today"><span class="brand-mark">P</span><span>庫存工作台<small>PORTO / VOICity</small></span></a>
+      <nav aria-label="工作區">
+        <button data-tab="today" class="nav-item active">採購</button>
+        <button data-tab="incoming" class="nav-item">到貨</button>
+        <button data-tab="quality" class="nav-item">待整理</button>
+        <button data-tab="catalog" class="nav-item">商品</button>
+      </nav>
+      <button id="logout" class="plain">登出</button>
+    </aside>
+    <div class="main">
+      <header class="topbar">
+        <div><h1 id="section-name">今日採購</h1><p id="workspace-date" class="workspace-date"></p></div>
+        <div class="topbar-actions"><button id="refresh" class="button">更新</button><button id="copy-report" class="button">複製摘要</button></div>
+      </header>
+      <div class="utilities">
+        <span id="preview-badge" class="badge" hidden>唯讀快照</span>
+        <details class="source-details">
+          <summary>資料與設定</summary>
+          <div class="source-panel">
+            <div id="sourcebar" class="sourcebar" aria-label="資料更新狀態"></div>
+            <p id="sync-note" class="muted"></p>
+            <div id="purchase-settings"></div>
+          </div>
+        </details>
+      </div>
+      <main id="main-content" tabindex="-1"><div class="loading-state">載入資料中…</div></main>
+    </div>
+  </div>
+  <dialog id="product-dialog"><button id="close-dialog" class="dialog-close" aria-label="關閉商品明細">×</button><div id="product-detail"></div></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <script type="module" src="src/app.mjs"></script>
+</body>
+</html>
