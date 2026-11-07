@@ -1,0 +1,256 @@
+import {createDemo,products,suppliers} from './data.mjs';
+import {demoConsolidate,readSnapshot,receiptDraft,runReceiptPreview,supplierName,totalUnits,validateImport} from './model.mjs';
+import {drawerModel} from './drawers.mjs';
+import {button,chip,escape,icon,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs';
+
+const demo=createDemo();
+const $=id=>document.getElementById(id);
+const main=$('main'),drawer=$('drawer'),search=$('search-dialog');
+const state={
+  localPreview:['127.0.0.1','localhost'].includes(location.hostname),
+  view:views[location.hash.slice(1)]?location.hash.slice(1):'dashboard',
+  filter:'all',query:'',sort:'sku',channel:'',category:'',page:1,gallery:'gallery',inventoryMode:'demo',
+  snapshot:null,snapshotItems:[],snapshotError:null,products,selected:{inventory:new Set(),shipping:new Set(),parcels:new Set()},
+  ledger:new Map(),collapsed:false,
+};
+if(state.view==='shipping')state.sort='deadline';
+
+const brandMark=`<span class="brand-mark">${icon('mark')}</span>`;
+const openButton=(label,glyph,kind)=>`<button class="icon-btn" aria-label="${label}" title="${label}" ${openAttrs(kind,'')}>${icon(glyph)}${kind==='notifications'?'<span class="notice-dot"></span>':''}</button>`;
+function renderShell(){
+  document.querySelector('.shell').classList.toggle('collapsed',state.collapsed);
+  const active=key=>state.view===key?'aria-current="page"':'';
+  const previewLabel=state.localPreview?'本機預覽':'展示資料';
+  $('sidebar').innerHTML=`<a class="brand" href="#dashboard" data-go="dashboard" aria-label="Portolink Operations 首頁">${brandMark}<span class="brand-text"><span class="brand-name">Portolink</span><span class="brand-sub">Operations</span></span></a>
+    <p class="side-caption">營運工作區</p><nav class="side-links" aria-label="主導覽">
+    ${modules.map(([key,label])=>`<button class="side-link" type="button" data-go="${key}" aria-label="${label}" title="${label}" ${active(key)}>${icon(key)}<span class="side-copy">${label}</span></button>`).join('')}</nav>
+    <div class="side-end"><button class="side-link side-collapse" data-action="sidebar" aria-label="${state.collapsed?'展開側邊欄':'收合側邊欄'}" aria-expanded="${!state.collapsed}">${icon('collapse')}<span class="side-copy">收合側邊欄</span></button>
+    <div class="side-mode"><span class="indicator"></span><span><strong>${previewLabel}</strong><small>PORTO 3C / VOICity</small></span></div></div>`;
+  $('topbar').innerHTML=`<a class="top-brand" href="#dashboard" data-go="dashboard" aria-label="Portolink 首頁">${brandMark}Portolink</a>
+    <button class="search-trigger" type="button" data-action="search" aria-label="全域搜尋">${icon('search')}<span>搜尋商品、訂單、包裹或供應商</span><kbd>⌘ K</kbd></button>
+    <div class="top-actions"><span class="top-mode">${chip(previewLabel,'amber')}</span>${openButton('通知','bell','notifications')}<span class="avatar" aria-label="Portolink 工作台">FW</span></div>`;
+  const order=['dashboard','inventory','purchase','shipping'];
+  $('mobile-nav').innerHTML=order.map(key=>{
+    const [,label,,short]=modules.find(x=>x[0]===key);
+    return `<button type="button" data-go="${key}" ${active(key)} aria-label="${label}">${icon(key)}${short}</button>`;
+  }).join('')+`<button type="button" ${openAttrs('more','')} ${['parcels','receiving'].includes(state.view)?'aria-current="page"':''}>${icon('more')}更多</button>`;
+}
+function renderMain(){ main.innerHTML=views[state.view](state,demo); }
+function render(){renderShell();renderMain();}
+function closePanels(){
+  if(drawer.open)drawer.close();
+  if(search.open)search.close();
+}
+function navigate(view,filter='all',options={}){
+  if(!views[view])return;
+  closePanels();
+  state.view=view;
+  Object.assign(state,{filter,query:'',category:'',channel:'',page:1,sort:view==='shipping'?'deadline':'sku'});
+  if(view==='inventory'&&options.snapshot)state.inventoryMode='snapshot';
+  if(view==='inventory'&&['low','immediate','replenish','incoming','zero','sufficient'].includes(filter))state.inventoryMode='demo';
+  if(location.hash!=='#'+view)history.pushState(null,'','#'+view);
+  render();
+  main.focus({preventScroll:true});
+  window.scrollTo({top:0});
+}
+window.addEventListener('hashchange',()=>navigate(location.hash.slice(1)||'dashboard'));
+
+function renderDrawer(kind,id){
+  const content=drawerModel(kind,id,state,demo);
+  if(!content)return;
+  const alreadyOpen=drawer.open;
+  if(search.open)search.close();
+  drawer.innerHTML=`<header class="drawer-head"><div><p class="overline">${escape(content.eyebrow)}</p><h2 id="drawer-title">${escape(content.title)}</h2></div><button class="icon-btn" type="button" data-action="close-drawer" aria-label="關閉明細">${icon('close')}</button></header><div class="drawer-content">${content.body}</div>`;
+  if(!alreadyOpen)drawer.showModal();
+  else drawer.scrollTo({top:0});
+  drawer.querySelector('[data-action="close-drawer"]').focus({preventScroll:true});
+}
+for(const panel of [drawer,search]){
+  panel.addEventListener('click',ev=>{if(ev.target===panel){const box=panel.getBoundingClientRect();if(ev.clientX<box.left||ev.clientX>box.right||ev.clientY<box.top||ev.clientY>box.bottom)panel.close();}});
+}
+
+function searchIndex(){
+  return [
+    ...products.map(p=>({label:p.sku,detail:p.brand+' · '+p.name+' · 示例',sku:p.sku,kind:'product',id:p.sku})),
+    ...demo.purchase.map(o=>({label:o.id,detail:o.source+' · '+supplierName(o.supplier)+' · '+o.lines.map(l=>l.sku).join(' '),glyph:'purchase',kind:'purchase',id:o.id})),
+    ...demo.shipping.map(o=>({label:o.id,detail:o.source+' · '+o.brand+' · '+o.lines.map(l=>l.sku).join(' '),glyph:'shipping',kind:'shipping',id:o.id})),
+    ...demo.parcels.map(p=>({label:p.waybill,detail:p.id+' · '+p.po+' · '+p.lines.map(l=>l.sku).join(' '),glyph:'parcels',kind:'parcel',id:p.id})),
+    ...demo.batches.map(p=>({label:p.id,detail:p.waybill??'未有台灣運單',glyph:'parcels',kind:'batch',id:p.id})),
+    ...demo.receiving.map(r=>({label:r.id,detail:r.ref+' · '+r.lines.map(l=>l.sku).join(' '),glyph:'receiving',kind:'receiving',id:r.id})),
+    ...suppliers.map(s=>({label:s.name,detail:s.channels+' · 供應商示例',glyph:'purchase',kind:'supplier',id:s.id})),
+    ...state.snapshotItems.map(p=>({label:p.sku,detail:p.name+' · 庫存快照',glyph:'inventory',kind:'snapshot',id:p.sku})),
+  ];
+}
+function showResults(value){
+  const key=value.trim().toLocaleLowerCase();
+  const found=key?searchIndex().filter(row=>(row.label+' '+row.detail).toLocaleLowerCase().includes(key))
+    .sort((a,b)=>Number(b.label.toLowerCase()===key)-Number(a.label.toLowerCase()===key)).slice(0,12):[];
+  $('search-results').innerHTML=found.length?found.map(recordLink).join(''):
+    `<div class="panel-pad muted">${key?'沒有符合的紀錄。':'輸入 SKU、採購單、供應商或物流單號。'}</div>`;
+}
+function openSearch(){
+  if(search.open){$('global-query').focus();return;}
+  if(drawer.open)drawer.close();
+  search.innerHTML=`<header class="drawer-head"><div><p class="overline">GLOBAL SEARCH</p><h2 id="search-title">全域搜尋</h2></div><button class="icon-btn" data-action="close-search" aria-label="關閉搜尋">${icon('close')}</button></header>
+    <div class="panel-pad"><input class="field" id="global-query" type="search" placeholder="例：MF296R 或 KK-DEMO-24" aria-label="搜尋全部工作區"></div><div id="search-results" class="search-results"></div>`;
+  showResults('');
+  search.showModal();
+  $('global-query').focus();
+}
+
+let toastTimer;
+function announce(message){
+  const toast=$('toast');
+  toast.textContent=message;
+  toast.hidden=false;
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{toast.hidden=true;},4000);
+}
+const csvValue = value => {
+  const text=String(value??'');
+  const protectedText=typeof value==='string'&&/^[=+\-@\t\r]/.test(text)?"'"+text:text;
+  return '"'+protectedText.replaceAll('"','""')+'"';
+};
+function download(filename,data,mime){
+  const url=URL.createObjectURL(new Blob([data],{type:mime}));
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=filename;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+const csv=(filename,rows)=>download(filename,'\uFEFF'+rows.map(row=>row.map(csvValue).join(',')).join('\r\n'),'text/csv;charset=utf-8');
+const inboundHeader=['單號','商品編號','商品名稱','規格','位置','數量','明細備註'];
+
+const actions={
+  sidebar:()=>{state.collapsed=!state.collapsed;renderShell();$('sidebar').querySelector('[data-action="sidebar"]').focus();},
+  search:openSearch,
+  'close-drawer':()=>drawer.close(),
+  'close-search':()=>search.close(),
+  consolidate:()=>{
+    const batch=demoConsolidate(demo,state.selected.parcels);
+    if(!batch){announce('請選取至少兩個已到漳州、尚未合箱的包裹。');return;}
+    state.selected.parcels.clear();
+    renderMain();
+    demo.activity.unshift({time:'11:20',title:'本機合箱演練已建立',detail:batch.parcels.length+' 個包裹 · '+batch.id,icon:'parcels',ref:['batch',batch.id]});
+    renderDrawer('batch',batch.id);
+  },
+  'record-inbound':button=>{
+    const record=demo.receiving.find(x=>x.id===button.dataset.id);
+    if(!record)return;
+    const result=runReceiptPreview(record,sourceForReceiving(record,demo),state.ledger);
+    if(result.ok){
+      demo.activity.unshift({time:'11:20',title:'本機入庫提交成功',detail:record.id+' · '+totalUnits(record.lines)+' 件',icon:'receiving',ref:['receiving',record.id]});
+      renderMain();
+      renderDrawer('receiving',record.id);
+    }
+    announce(result.message);
+  },
+  'export-inbound':button=>{
+    const record=demo.receiving.find(x=>x.id===button.dataset.id);
+    if(!record)return;
+    const draft=receiptDraft(record,sourceForReceiving(record,demo));
+    if(!draft.allowed){announce(draft.reason);return;}
+    csv('preview-'+record.id+'-inbound.csv',[inboundHeader,...draft.rows]);
+  },
+  'export-labels':()=>{
+    const rows=demo.shipping.filter(x=>state.selected.shipping.has(x.id));
+    csv('preview-shipping-label-review.csv',[['店家','通路','訂單','標籤狀態','3PL 提交','異常'],...rows.map(x=>[x.brand,x.source,x.id,x.label,x.handoff,x.error])]);
+  },
+  'export-inventory':()=>{
+    const rows=moduleInventory(state,demo).filter(x=>state.selected.inventory.has(x.sku));
+    csv('preview-inventory-'+state.inventoryMode+'.csv',[['資料來源','商品編號','商品名稱','現有庫存'],...rows.map(x=>[x.source,x.sku,x.name,x.stock])]);
+  },
+  'import-template':()=>download('preview-shipping-import.json',JSON.stringify([{id:'ES-DEMO-710',source:'EasyStore',brand:'VOICity',lines:[{sku:'HT813',qty:2}]}],null,2),'application/json'),
+};
+document.addEventListener('click',event=>{
+  const element=event.target.closest('button,a[data-go]');
+  if(!element)return;
+  const d=element.dataset;
+  if(d.go){event.preventDefault();navigate(d.go,d.jump||'all',{snapshot:d.snapshot==='true'});return;}
+  if(d.open){renderDrawer(d.open,d.id);return;}
+  if(d.action){actions[d.action]?.(element);return;}
+  if(d.scroll){$(d.scroll)?.scrollIntoView({block:'start',behavior:'smooth'});return;}
+  if(d.filter){state.filter=d.filter;state.page=1;renderMain();main.querySelector('[aria-pressed="true"].tab')?.focus({preventScroll:true});return;}
+  if(d.gallery){state.gallery=d.gallery;if(['master','channels'].includes(state.filter))state.filter='all';renderMain();return;}
+  if(d.inventoryMode){state.inventoryMode=d.inventoryMode;state.selected.inventory.clear();Object.assign(state,{filter:'all',page:1,query:'',category:''});renderMain();return;}
+  if(d.categoryButton){state.filter='all';state.category=d.categoryButton;state.page=1;renderMain();return;}
+  if(d.page){state.page=Number(d.page);renderMain();return;}
+});
+document.addEventListener('keydown',event=>{
+  if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'){event.preventDefault();openSearch();}
+});
+document.addEventListener('input',event=>{
+  const input=event.target;
+  if(input.id==='global-query'){showResults(input.value);return;}
+  if(input.id==='view-query'){
+    const position=input.selectionStart;
+    state.query=input.value;state.page=1;
+    renderMain();
+    const current=$('view-query');
+    current.focus({preventScroll:true});
+    current.setSelectionRange(position,position);
+  }
+});
+document.addEventListener('change',async event=>{
+  const input=event.target;
+  if(input.id==='import-file'&&input.files[0]){
+    const message=$('import-status');
+    try{
+      if(input.files[0].size>500000)throw new Error('檔案超過範本大小限制。');
+      const rows=validateImport(await input.files[0].text(),demo.shipping.map(x=>x.id));
+      demo.shipping.push(...rows);
+      state.filter='all';
+      state.channel='';
+      state.query='';
+      renderMain();
+      message.textContent='已匯入 '+rows.length+' 筆示例。';
+    }catch(error){message.textContent=error.message;}
+    return;
+  }
+  if(['channel','category','sort'].includes(input.id)){state[input.id]=input.value;state.page=1;renderMain();return;}
+  if(input.dataset.selectVisible==='shipping'){
+    for(const order of shippingRows(state,demo)){
+      if(input.checked)state.selected.shipping.add(order.id);else state.selected.shipping.delete(order.id);
+    }
+    renderMain();
+    return;
+  }
+  if(input.dataset.pick){
+    const selected=state.selected[input.dataset.pick];
+    if(input.checked)selected.add(input.value);else selected.delete(input.value);
+    renderMain();
+    const option=[...main.querySelectorAll('[data-pick]')].find(el=>el.dataset.pick===input.dataset.pick&&el.value===input.value);
+    option?.focus({preventScroll:true});
+  }
+});
+document.addEventListener('submit',event=>{
+  const id=event.target.dataset.receive;
+  if(!id)return;
+  event.preventDefault();
+  const record=demo.receiving.find(r=>r.id===id);
+  if(!record?.written||record.carrier!=='delivered')return;
+  const form=new FormData(event.target);
+  const counts=record.lines.map((_,i)=>form.get('qty-'+i));
+  if(counts.some(x=>x===null||x===''||!Number.isSafeInteger(Number(x))||Number(x)<0||Number(x)>100000)){announce('請確認每個品項的點收數量。');return;}
+  record.actual=Object.fromEntries(record.lines.map((item,i)=>[item.sku,Number(counts[i])]));
+  record.status=record.lines.every(item=>record.actual[item.sku]===item.qty)?'received':'mismatch';
+  renderMain();
+  renderDrawer('receiving',id);
+  announce(record.status==='received'?'點收演練完成。':'已記錄數量差異。');
+});
+
+async function openSnapshot(){
+  if(!state.localPreview)return;
+  try{
+    const result=await fetch('/__preview.json',{cache:'no-store',credentials:'omit'});
+    if(!result.ok)throw new Error('本機庫存快照未載入。');
+    const snapshot=await result.json();
+    if(!Array.isArray(snapshot.items)||!snapshot.items.length)throw new Error('庫存快照格式不符。');
+    state.snapshot=snapshot;
+    state.snapshotItems=readSnapshot(snapshot);
+  }catch(error){state.snapshotError=error.message;}
+  if(state.inventoryMode==='snapshot')renderMain();
+}
+render();
+void openSnapshot();
