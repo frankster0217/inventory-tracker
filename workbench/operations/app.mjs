@@ -1,7 +1,7 @@
 import {createDemo,products,suppliers} from './data.mjs';
 import {demoConsolidate,readSnapshot,receiptDraft,runReceiptPreview,supplierName,totalUnits,validateImport} from './model.mjs';
-import {drawerModel} from './drawers.mjs';
-import {button,chip,escape,icon,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs';
+import {drawerModel} from './drawers.mjs?v=20261108-focus';
+import {button,chip,escape,icon,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs?v=20261108-focus';
 
 const demo=createDemo();
 const $=id=>document.getElementById(id);
@@ -170,7 +170,6 @@ document.addEventListener('click',event=>{
   if(d.go){event.preventDefault();navigate(d.go,d.jump||'all',{snapshot:d.snapshot==='true'});return;}
   if(d.open){renderDrawer(d.open,d.id);return;}
   if(d.action){actions[d.action]?.(element);return;}
-  if(d.scroll){$(d.scroll)?.scrollIntoView({block:'start',behavior:'smooth'});return;}
   if(d.filter){state.filter=d.filter;state.page=1;renderMain();main.querySelector('[aria-pressed="true"].tab')?.focus({preventScroll:true});return;}
   if(d.gallery){state.gallery=d.gallery;if(['master','channels'].includes(state.filter))state.filter='all';renderMain();return;}
   if(d.inventoryMode){state.inventoryMode=d.inventoryMode;state.selected.inventory.clear();Object.assign(state,{filter:'all',page:1,query:'',category:''});renderMain();return;}
@@ -194,6 +193,14 @@ document.addEventListener('input',event=>{
 });
 document.addEventListener('change',async event=>{
   const input=event.target;
+  if(input.hasAttribute('data-filter-select')){
+    const label=input.closest('label').querySelector('span').textContent;
+    state.filter=input.value;
+    state.page=1;
+    renderMain();
+    [...main.querySelectorAll('.mobile-filter')].find(x=>x.querySelector('span').textContent===label)?.querySelector('select').focus({preventScroll:true});
+    return;
+  }
   if(input.id==='import-file'&&input.files[0]){
     const message=$('import-status');
     try{
