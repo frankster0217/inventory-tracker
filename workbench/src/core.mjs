@@ -1,5 +1,4 @@
-// One calculation shared by the dashboard and notification report.
-// Warehouse codes identify products. Names never merge different codes.
+// Verified purchasing and reports use exact warehouse codes.
 export const DEFAULTS = Object.freeze({ targetWeeks: 4, leadTimeDays: 4, buffer: 1.10, maxAgeHours: 24 });
 export const key = value => String(value ?? '').normalize('NFKC').trim();
 export const number = value => value === null || value === '' || value === undefined ? null : Number.isFinite(Number(value)) ? Number(value) : null;
@@ -90,6 +89,37 @@ export function buildPending(orders, products) {
 function freshness(timestamp,now,maxAge) {
   const time=Date.parse(timestamp), age=(now-time)/3600000;
   return {timestamp:timestamp||null,ageHours:Number.isFinite(age)?age:null,fresh:Number.isFinite(age)&&age>=-0.1&&age<=maxAge};
+}
+
+// The original tracker's estimates use its name-based sales and incoming totals.
+// Keep these separate from the verified purchase recommendations.
+export function buildTrackerPlan(snapshot, {targetWeeks, leadTimeDays, minOrderQty = 5}) {
+  const {tracker} = snapshot;
+  if (!tracker || tracker.error) return null;
+  const byName = new Map(tracker.salesByName.map(row => [row.product_name, row]));
+  const byCode = new Map(snapshot.sales_velocity_by_code.map(row => [row.product_code, row]));
+  const incoming = new Map(tracker.pendingByName.map(row => [row.product_name, Number(row.pending_qty) || 0]));
+  const overrides = new Map(tracker.activityOverrides.map(row => [row.product_name, row.category]));
+  const supplierNames = new Map(snapshot.suppliers.map(row => [row.supplier_id, row.name]));
+  const archived = new Set(snapshot.archived);
+  const rows = [];
+  for (const {product_id: code, product_name: name, supplier_id, quantity: stock} of tracker.inventory) {
+    if (archived.has(name)) continue;
+    const sold = byName.get(name) || byCode.get(code);
+    const override = overrides.get(name);
+    const active = override ? ['high', 'active'].includes(override) : sold?.days_m1 >= 3;
+    if (!active || !(sold?.sold_m2 > 0)) continue;
+    const quantity = number(stock);
+    if (quantity === null) continue;
+    const pending = incoming.get(name) || 0;
+    const weekly = sold.sold_m2 / (60 / 7);
+    const coverWeeks = quantity / weekly;
+    const target = weekly * (targetWeeks + leadTimeDays / 7) * DEFAULTS.buffer;
+    const rawNeed = Math.max(0, Math.ceil(target - quantity - pending));
+    const quantityToBuy = rawNeed >= minOrderQty ? rawNeed : 0;
+    rows.push({code, name, supplier_id, supplier:supplierNames.get(supplier_id) || '供應商待設定', quantity, pending, rawNeed, quantityToBuy, sold60:sold.sold_m2, urgent:coverWeeks < 1.5, coverWeeks});
+  }
+  return rows.sort((a,b) => Number(b.quantityToBuy > 0) - Number(a.quantityToBuy > 0) || a.coverWeeks - b.coverWeeks);
 }
 
 export function buildWorkbench(snapshot, settings={}, now=Date.now()) {

@@ -11,31 +11,40 @@ export async function readAll(client,table,orderBy) {
   }
   throw new Error(`${table}: pagination limit exceeded`);
 }
-export async function readVelocity(client,name='get_sales_velocity_by_code') {
+async function readRpcRows(client,name,orderBy) {
   const rows=[];
   for(let offset=0;offset<200000;offset+=1000){
-    const {data,error}=await client.rpc(name).order('product_code',{ascending:true}).range(offset,offset+999);
+    const {data,error}=await client.rpc(name).order(orderBy,{ascending:true}).range(offset,offset+999);
     if(error)throw new Error(`${name}: ${error.message}`);
     if(!Array.isArray(data))throw new Error(`${name}: invalid response`);
     rows.push(...data);if(data.length<1000)return rows;
   }
   throw new Error(`${name}: pagination limit exceeded`);
 }
+export function readVelocity(client,name='get_sales_velocity_by_code') {
+  return readRpcRows(client,name,'product_code');
+}
 async function optionalTable(client,table,orderBy) {
   try{return await readAll(client,table,orderBy);}catch(error){if(['PGRST205','42P01'].includes(error.code))return null;throw error;}
 }
 export async function loadSnapshot(client) {
+  const tracker = Promise.all([
+    readRpcRows(client,'get_sales_velocity_by_name','product_name'),
+    readRpcRows(client,'get_pending_quantities','product_name'),
+    readAll(client,'activity_overrides','product_name')
+  ]).then(([salesByName, pendingByName, activityOverrides]) => ({salesByName, pendingByName, activityOverrides}),
+    error => ({error:error.message}));
   const results=await Promise.allSettled([
     readAll(client,'inventory','product_id'),readAll(client,'inventory_meta','id'),
     readAll(client,'supplier_rules','supplier_id'),readAll(client,'archived_products','product_name'),
     readAll(client,'pending_orders','id'),readVelocity(client),
     readAll(client,'reorder_meta','product_name'),
     client.from('sales_orders').select('order_date,synced_at').order('synced_at',{ascending:false}).limit(1),
-    optionalTable(client,'inventory_skus','product_id'),optionalTable(client,'operations_state','id')
+    optionalTable(client,'inventory_skus','product_id'),optionalTable(client,'operations_state','id'),tracker
   ]);
   const errors=results.filter(r=>r.status==='rejected');
   if(errors.length)throw new Error(errors.map(e=>e.reason.message).join('\n'));
-  const [legacy,meta,suppliers,archived,pending,velocity,reorder,sales,canonical,state]=results.map(r=>r.value);
+  const [legacy,meta,suppliers,archived,pending,velocity,reorder,sales,canonical,state,trackerInputs]=results.map(r=>r.value);
   if(sales.error)throw new Error(`sales_orders: ${sales.error.message}`);
   const inventoryMeta=meta.find(m=>m.id===1);
   const currentCanonical=canonical?.filter(r=>r.present_in_latest_import===true);
@@ -43,6 +52,7 @@ export async function loadSnapshot(client) {
   if(!currentCanonical?.length&&legacy.length<(inventoryMeta?.row_count||0))throw new Error('庫存清單不完整；請重新同步');
   const ops=state?.find(s=>s.id==='purchase_sync')?.payload;
   const snapshot={captured_at:new Date().toISOString(),inventory:legacy,inventory_meta:inventoryMeta,suppliers,archived:archived.map(r=>r.product_name),pending_orders:pending,sales_velocity_by_code:velocity,reorder_meta:reorder,sales_freshness:{latest_sync:sales.data?.[0]?.synced_at,latest_order:sales.data?.[0]?.order_date},purchase_sync:ops||{complete:false},canonical:!!currentCanonical?.length};
+  snapshot.tracker={...trackerInputs,inventory:legacy};
   if(currentCanonical?.length) {
     const sync=state?.find(s=>s.id==='stock_sync')?.payload;
     if(!sync?.complete||sync.row_count!==currentCanonical.length)throw new Error('新版 SKU 庫存尚未完成完整同步，暫停採購建議');

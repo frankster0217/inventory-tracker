@@ -1,4 +1,4 @@
-import {buildWorkbench,buildReport,groupBySupplier,PAID,UNPAID} from './core.mjs';
+import {buildWorkbench,buildTrackerPlan,buildReport,groupBySupplier,PAID,UNPAID} from './core.mjs';
 import {SUPABASE_URL,PUBLIC_KEY,loadSnapshot,saveSkuPreferences} from './data.mjs';
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -6,8 +6,8 @@ const fmt=v=>v===null||v===undefined?'—':Number(v).toLocaleString('zh-TW',{max
 const stamp=value=>value?new Date(value).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}):'尚未確認';
 const isPreview=['127.0.0.1','localhost'].includes(location.hostname)&&new URLSearchParams(location.search).get('preview')==='1';
 const labels = { today: '今日採購', incoming: '採購與到貨', quality: '待整理', catalog: '商品' };
-let client, snapshot, model, tab = location.hash.slice(1) || 'today';
-let query = '', filter = 'all', issueLimit = 60, settings = {}, selectedSupplier = null, lastLoadAt = 0;
+let client, snapshot, model, trackerPlan, tab = location.hash.slice(1) || 'today';
+let query = '', filter = tab === 'today' && !isPreview ? 'ready' : 'all', issueLimit = 60, settings = {}, selectedSupplier = null, lastLoadAt = 0;
 try { settings = JSON.parse(localStorage.getItem('workbench-settings') || '{}'); } catch {}
 
 function toast(message) {
@@ -43,15 +43,17 @@ function sourceBar() {
   $('purchase-settings').innerHTML = `<div class="rule-settings">
     <label>目標庫存 <input data-setting="targetWeeks" aria-label="目標庫存週數" type="number" min="1" max="26" step="0.5" value="${model.cfg.targetWeeks}"> 週</label>
     <label>運送預留 <input data-setting="leadTimeDays" aria-label="預留運送天數" type="number" min="0" max="60" value="${model.cfg.leadTimeDays}"> 天</label>
-  </div><p class="muted">以近 60 天銷量估算需求，再扣除庫存與已付款未到貨量。</p>`;
+    ${trackerPlan ? `<label>最低採購量 <input data-setting="minOrderQty" aria-label="最低採購量" type="number" min="1" max="50" value="${model.cfg.minOrderQty ?? 5}"> 件</label>` : ''}
+  </div><p class="muted">以近 60 天銷量估算需求，再扣除庫存與已記錄的未到貨量。</p>`;
 }
 
 function stats() {
   const {ready, incoming, unpaid, issues} = model.stats;
   const complete = model.sources.purchasesComplete;
   const needsReview = model.issues.some(issue => issue.severity === 'block');
+  const restock = trackerPlan?.filter(row => row.quantityToBuy > 0).length;
   return `<section class="stats" aria-label="採購概況">
-    <button class="stat ${ready ? 'emphasis' : ''}" data-filter="${!ready && needsReview ? 'review' : 'ready'}"><span>可採購</span><strong>${!ready && needsReview ? '待核對' : ready}</strong></button>
+    <button class="stat ${(restock ?? ready) ? 'emphasis' : ''}" data-filter="${trackerPlan || ready || !needsReview ? 'ready' : 'review'}"><span>需補貨</span><strong>${snapshot.tracker?.error ? '—' : restock ?? (!ready && needsReview ? '待核對' : ready)}</strong></button>
     <button class="stat" data-tab="incoming"><span>已付款未到</span><strong>${complete ? incoming : '待對帳'}</strong></button>
     <button class="stat" data-action="unpaid"><span>待付款</span><strong>${unpaid || (complete ? '0' : '—')}</strong></button>
     <button class="stat" data-tab="quality"><span>待整理</span><strong>${issues}</strong></button>
@@ -61,7 +63,8 @@ function stats() {
 function purchaseNotice() {
   if (model.sources.purchasesComplete && tab === 'incoming') return '';
   if (!model.sources.purchasesComplete) {
-    return `<div class="notice"><strong>已購訂單待對帳</strong>${tab === 'today' ? '<button class="button" data-tab="incoming">核對訂單 →</button>' : ''}</div>`;
+    const message = tab === 'today' && trackerPlan ? '在途未對帳 · 建議量為估算' : '已購訂單待對帳';
+    return `<div class="notice"><strong>${message}</strong>${tab === 'today' ? '<button class="button" data-tab="incoming">核對訂單 →</button>' : ''}</div>`;
   }
   if (model.issues.some(issue => issue.severity === 'block')) {
     return '<div class="notice"><strong>資料待核對</strong><button class="button" data-tab="quality">查看待辦 →</button></div>';
@@ -74,12 +77,17 @@ function productCell(label, value, className = '') {
 }
 
 function productRow(p, mode) {
-  const priority = mode === 'buy' && p.urgent && p.actionable ? badge('優先', 'red') : '';
+  const priority = mode === 'buy' && p.urgent && (trackerPlan ? p.quantityToBuy > 0 : p.actionable) ? badge('優先', 'red') : '';
   const product = `<td class="product-cell"><button class="product-button" data-product="${esc(p.code)}">${esc(p.code)}</button>${priority}</td>`;
   const stock = productCell('庫存', fmt(p.quantity), p.quantity === 0 ? 'stock-red' : '');
   if (mode === 'catalog') {
     const status = p.archived ? badge('已封存') : p.issues.length ? badge(p.issues[0], 'amber') : '—';
     return `<tr>${product}${stock}${productCell('狀態', status)}</tr>`;
+  }
+  if (trackerPlan) {
+    const estimate = p.quantityToBuy > 0 ? `<strong class="buy-number">${fmt(p.quantityToBuy)}</strong>`
+      : p.rawNeed > 0 ? badge(`低於門檻 (${fmt(p.rawNeed)})`) : '—';
+    return `<tr>${product}${stock}${productCell('記錄未到', fmt(p.pending))}${productCell('建議買', estimate)}</tr>`;
   }
   const pending = model.sources.purchasesComplete ? fmt(p.pending) : '—';
   const suggestion = p.actionable && p.rawNeed
@@ -89,11 +97,17 @@ function productRow(p, mode) {
 }
 
 function productTable(rows, mode) {
-  const columns = mode === 'catalog' ? ['庫存', '狀態'] : ['庫存', '未到', '建議買'];
+  const columns = mode === 'catalog' ? ['庫存', '狀態'] : ['庫存', trackerPlan ? '記錄未到' : '未到', '建議買'];
   return `<table class="data-table ${mode}-table"><thead><tr><th scope="col">商品</th>${columns.map(col => `<th scope="col">${col}</th>`).join('')}</tr></thead><tbody>${rows.map(p => productRow(p, mode)).join('')}</tbody></table>`;
 }
 
 function purchaseGroups() {
+  if (trackerPlan) {
+    const rows = trackerPlan.filter(row => matches(row) && (
+      filter === 'ready' ? row.quantityToBuy > 0 : filter === 'urgent' ? row.urgent : true
+    ));
+    return groupBySupplier(rows, snapshot.suppliers);
+  }
   const rows = model.candidates.filter(p => matches(p) && (
     filter === 'ready' ? p.actionable : filter === 'urgent' ? p.urgent :
     filter === 'review' ? !p.actionable : true
@@ -101,26 +115,35 @@ function purchaseGroups() {
   return groupBySupplier(rows, snapshot.suppliers);
 }
 
+function canCopyPurchaseList(group) {
+  return group.rows.every(row => row.quantityToBuy > 0 && (
+    trackerPlan ? model.products.some(product => product.code === row.code && product.actionable &&
+      product.quantityToBuy === row.quantityToBuy && product.pending === row.pending && product.supplier_id === row.supplier_id)
+      : row.actionable
+  ));
+}
+
 function supplierView(groups, mode = 'buy') {
   if (!groups.length) return empty('沒有符合的商品');
   const selected = groups.find(group => group.id === selectedSupplier);
   if (selected) {
-    const copy = mode === 'buy' && selected.rows.every(row => row.actionable)
+    const copy = mode === 'buy' && canCopyPurchaseList(selected)
       ? `<button class="button primary" data-copy-supplier="${esc(selected.id)}">複製採購清單</button>` : '';
+    const total = mode === 'buy' && trackerPlan && selected.totalQty ? ` · 建議 ${fmt(selected.totalQty)} 件` : '';
     return `<div class="supplier-selection"><button class="button" data-action="all-suppliers">← 供應商</button></div>
       <section class="supplier-card">
-        <header class="selected-supplier-heading"><div><h2>${esc(selected.name)}</h2><span class="muted">${selected.rows.length} 項商品</span></div>${copy}</header>
+        <header class="selected-supplier-heading"><div><h2>${esc(selected.name)}</h2><span class="muted">${selected.rows.length} 項商品${total}</span></div>${copy}</header>
         ${productTable(selected.rows, mode)}
       </section>`;
   }
   return `<div class="supplier-overview-heading"><h2>供應商</h2><span class="muted">${groups.length} 組</span></div>
     <div class="supplier-grid">${groups.map(g => {
-      const urgent = g.rows.filter(row => row.actionable && row.urgent && row.rawNeed > 0).length;
+      const urgent = g.rows.filter(row => row.urgent && row.rawNeed > 0 && (trackerPlan ? row.quantityToBuy > 0 : row.actionable)).length;
       const status = !g.id ? badge('待指派', 'amber')
         : mode === 'buy' && urgent ? badge(`${urgent} 項優先`, 'red') : '';
       return `<button class="supplier-tile ${g.id ? '' : 'unassigned-tile'}" data-supplier="${esc(g.id)}">
         <span class="supplier-tile-name">${esc(g.name)}</span>
-        <span class="supplier-tile-meta"><span>${g.rows.length} 項商品</span>${status}</span>
+        <span class="supplier-tile-meta"><span>${g.rows.length} 項商品${mode === 'buy' && trackerPlan && g.totalQty ? ` · ${fmt(g.totalQty)} 件` : ''}</span>${status}</span>
         <span class="tile-arrow" aria-hidden="true">›</span>
       </button>`;
     }).join('')}</div>`;
@@ -133,7 +156,9 @@ function filters(options) {
 }
 
 function today() {
-  const options = {all: '全部', ready: '可採購', review: '待核對', urgent: '低庫存'};
+  if (snapshot.tracker?.error) return stats() + empty('補貨資料未載入', snapshot.tracker.error);
+  const options = trackerPlan ? {ready: '需補貨', all: '全部', urgent: '低庫存'}
+    : {all: '全部', ready: '需補貨', review: '待核對', urgent: '低庫存'};
   const groups = purchaseGroups();
   const showingSupplier = groups.some(group => group.id === selectedSupplier);
   return (showingSupplier ? '' : stats()) + purchaseNotice() + `<div class="toolbar">${search()}
@@ -222,7 +247,7 @@ function render() {
   $('main-content').innerHTML = ({today, incoming, quality, catalog}[tab] || today)();
 }
 
-function go(next, nextFilter = 'all') {
+function go(next, nextFilter = next === 'today' && trackerPlan ? 'ready' : 'all') {
   tab = next; filter = nextFilter; query = ''; issueLimit = 60; selectedSupplier = null;
   history.replaceState(null, '', '#' + tab);
   render();
@@ -232,11 +257,12 @@ function go(next, nextFilter = 'all') {
 function detail(code) {
   const p = model.products.find(product => product.code === code);
   if (!p) return;
+  const estimate = tab === 'today' ? trackerPlan?.find(row => row.code === code) : null;
   $('product-detail').innerHTML = `<h2>${esc(p.code)}</h2>${p.name !== p.code ? `<p class="muted">${esc(p.name)}</p>` : ''}
     <div class="detail-stats">
-      <div>庫存<strong>${fmt(p.quantity)}</strong>${esc(p.unit)}</div>
-      <div>未到<strong>${model.sources.purchasesComplete ? fmt(p.pending) : '—'}</strong></div>
-      <div>近 60 天銷量<strong>${fmt(p.sold60)}</strong></div>
+      <div>庫存<strong>${fmt(estimate?.quantity ?? p.quantity)}</strong>${esc(p.unit)}</div>
+      <div>${estimate ? '記錄未到' : '未到'}<strong>${estimate ? fmt(estimate.pending) : model.sources.purchasesComplete ? fmt(p.pending) : '—'}</strong></div>
+      <div>近 60 天銷量<strong>${fmt(estimate?.sold60 ?? p.sold60)}</strong></div>
     </div>
     <dl class="product-facts"><dt>供應商</dt><dd>${esc(p.supplier)}</dd><dt>倉位</dt><dd>${esc(p.location || '—')}</dd><dt>庫存可售</dt><dd>${p.coverDays === null ? '—' : fmt(p.coverDays) + ' 天'}</dd></dl>
     ${p.proposal ? `<p class="notice">${esc(p.proposal.reason || '供應商待核對')}</p>` : ''}
@@ -271,13 +297,19 @@ document.addEventListener('submit',async event=>{
  }catch(error){$('preference-status').textContent=error.message;button.disabled=false;}
 });
 
+function updateModel() {
+  model=buildWorkbench(snapshot,settings);
+  trackerPlan=buildTrackerPlan(snapshot,model.cfg);
+  render();
+}
+
 async function reload(){
  $('refresh').disabled=true;
  const modeBadge=$('preview-badge');
  try{
    if(isPreview){const r=await fetch('/__preview.json',{cache:'no-store'});if(!r.ok)throw new Error('找不到本機預覽資料');snapshot=await r.json();}
    else snapshot=await loadSnapshot(client);
-   model=buildWorkbench(snapshot,settings);lastLoadAt=Date.now();$('copy-report').disabled=false;render();
+   updateModel();lastLoadAt=Date.now();$('copy-report').disabled=false;
    if(!isPreview){
      modeBadge.textContent='即時連線';
      modeBadge.hidden=false;
@@ -292,7 +324,7 @@ document.addEventListener('click',async event=>{
  if(b.dataset.tab){event.preventDefault();go(b.dataset.tab);}
  if(b.dataset.filter){filter=b.dataset.filter;issueLimit=60;render();}
  if(b.dataset.product)detail(b.dataset.product);
- if(b.dataset.copySupplier){event.preventDefault();event.stopPropagation();const g=purchaseGroups().find(g=>g.id===b.dataset.copySupplier);if(g){const rows=g.rows.filter(p=>p.actionable);await navigator.clipboard.writeText(`${g.name}\n`+rows.map(p=>`${p.code} x ${p.quantityToBuy}`).join('\n'));toast('已複製核對完成的採購清單');}}
+ if(b.dataset.copySupplier){event.preventDefault();event.stopPropagation();const g=purchaseGroups().find(g=>g.id===b.dataset.copySupplier);if(g&&canCopyPurchaseList(g)){await navigator.clipboard.writeText(`${g.name}\n`+g.rows.map(p=>`${p.code} x ${p.quantityToBuy}`).join('\n'));toast('已複製核對完成的採購清單');}}
  if(b.dataset.action==='unpaid')go('incoming','unpaid');
  if(b.dataset.action==='more-issues'){issueLimit+=60;render();}
 });
@@ -301,14 +333,14 @@ document.addEventListener('input',event=>{
 });
 document.addEventListener('change',async event=>{
  if(event.target.id==='purchase-filter'){filter=event.target.value;render();}
- if(event.target.dataset.setting){const v=Number(event.target.value);if(!Number.isFinite(v)||v<0)return;settings[event.target.dataset.setting]=v;localStorage.setItem('workbench-settings',JSON.stringify(settings));model=buildWorkbench(snapshot,settings);render();}
+ if(event.target.dataset.setting){const v=Number(event.target.value);if(!event.target.value||!event.target.validity.valid||!Number.isFinite(v))return;settings[event.target.dataset.setting]=v;localStorage.setItem('workbench-settings',JSON.stringify(settings));updateModel();}
  if(event.target.id==='warehouse-file'&&event.target.files[0]){
    try{const file=event.target.files[0];const rows=parseCsv(await file.text());let normalized;
      if(rows[0]?.[0]?.replace(/^\uFEFF/,'')==='textBox9'&&rows[0].length===7)normalized=rows.slice(1).filter(r=>r.length===7&&r[2].trim()).map(r=>({code:r[2].trim(),name:r[3].trim(),unit:r[4],location:r[5],quantity:Number(r[6].replace(/,/g,''))}));
      else throw new Error('請使用 Cloudmaker 庫存單的完整 CSV 匯出格式。');
      if(!normalized.length||normalized.some(r=>!Number.isFinite(r.quantity)))throw new Error('有品項或數量無法讀取，請先確認匯出檔。');
      // This export has no generation timestamp. Do not mistake file modification time for stock freshness.
-     snapshot={...snapshot,warehouse:{rows:normalized,captured_at:null,uploaded_at:new Date().toISOString()}};model=buildWorkbench(snapshot,settings);render();toast(`已比對 ${normalized.length} 個 SKU；匯出時間未確認，僅供核對。`);
+     snapshot={...snapshot,warehouse:{rows:normalized,captured_at:null,uploaded_at:new Date().toISOString()}};updateModel();toast(`已比對 ${normalized.length} 個 SKU；匯出時間未確認，僅供核對。`);
    }catch(error){toast(error.message);}
  }
 });
