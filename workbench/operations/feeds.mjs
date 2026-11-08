@@ -31,8 +31,24 @@ const stale=value=>Date.now()-Date.parse(value)>90*60*1000;
 const itemList=r=>Array.isArray(r.items)?r.items:[];
 const itemLabel=item=>escape(item.variant||item.name)+' × '+escape(item.quantity);
 const purchaseItems=items=>items.length
-  ?`<ul class="purchase-items">${items.map(item=>`<li><span class="purchase-item"><span>${escape(item.name)}</span><span class="purchase-quantity">× ${escape(item.quantity)}</span></span></li>`).join('')}</ul>`
+  ?`<ul class="purchase-items">${items.map(item=>`<li><span class="purchase-item"><strong>${escape(item.name)}</strong><span class="purchase-quantity">× ${escape(item.quantity)}</span></span></li>`).join('')}</ul>`
   :'<strong>商品明細待核對</strong>';
+function supplierLabel(record) {
+  const name=escape(record.supplier||'供應商未核對');
+  if(!record.supplier||typeof record.supplier_url!=='string')return name;
+  let url;
+  try { url=new URL(record.supplier_url); } catch { return name; }
+  if(url.protocol!=='https:'||url.username||url.password||url.port||url.pathname!=='/'||
+    !/^[a-z0-9-]+\.1688\.com$/.test(url.hostname)||
+    /^(www|m|detail|s|air|im|login|trade|qr)\./.test(url.hostname))return name;
+  return `<a class="purchase-supplier" href="${escape(url.origin)}/" target="_blank" rel="noopener noreferrer">${name}</a>`;
+}
+const purchaseMeta=record=>`<dl class="purchase-meta">
+  <div><dt>日期</dt><dd>${record.date?`<time>${escape(record.date)}</time>`:'日期未核對'}</dd></div>
+  <div><dt>供應商</dt><dd>${supplierLabel(record)}</dd></div>
+  <div><dt>寄送地</dt><dd>${escape(record.route||'寄送地未核對')}</dd></div>
+  <div><dt>MagicBuy</dt><dd class="purchase-number">${escape(record.id)}</dd></div>
+</dl>`;
 const waybills=r=>Array.isArray(r.waybills)?r.waybills:r.waybill?[r.waybill]:[];
 const recordKey=(source,id)=>source+'|'+id;
 const sourceRows=feeds=>feeds.flatMap(feed=>(Array.isArray(feed.records)?feed.records:[]).map(record=>({feed,source:feed.source,record})));
@@ -67,7 +83,8 @@ function feedRow(row,feeds) {
   const status=badge(r.status??'待核對');
   const open=openAttrs('feed',recordKey(source,r.id));
   if(source==='magicbuy')return `<div class="record-link feed-row purchase-order">
-    <div class="task-text">${purchaseItems(itemList(r))}${meta}</div>
+    ${purchaseMeta(r)}
+    <div class="purchase-products">${purchaseItems(itemList(r))}${linked?`<p class="purchase-tracking">${escape(linked)}</p>`:''}</div>
     <button class="purchase-open" type="button" ${open} aria-label="查看訂單 ${escape(r.id)}，${escape(r.status??'待核對')}">${status}${icon('chevron')}</button></div>`;
   return `<button class="record-link feed-row" ${open}>
     <span class="task-text"><strong>${lineLabel(r)}</strong>${meta}</span>
@@ -115,9 +132,9 @@ export function feedDrawer(id,state) {
   if(!row)return null;
   const {source,record:r,feed}=row;
   const related=matchesFor(state.feed.rows,source,r);
-  return {title:r.id,eyebrow:sources[source].label,body:`
+  return {title:source==='magicbuy'?'採購明細':r.id,eyebrow:sources[source].label,body:`
     <div class="legend">${badge(r.status??'待核對')} ${feedStatus(feed)}</div>
-    <section><h3>紀錄明細</h3><p>${[r.supplier,r.date,r.route,r.deadline?'出貨期限 '+r.deadline:null,r.eventAt?timestamp(r.eventAt):null,r.eta?'預計送達 '+r.eta:null,r.weight].filter(Boolean).map(escape).join(' · ')}</p>
+    <section><h3>紀錄明細</h3>${source==='magicbuy'?purchaseMeta(r):`<p>${[r.supplier,r.date,r.route,r.deadline?'出貨期限 '+r.deadline:null,r.eventAt?timestamp(r.eventAt):null,r.eta?'預計送達 '+r.eta:null,r.weight].filter(Boolean).map(escape).join(' · ')}</p>`}
     <p>${waybills(r).length?'運單 '+waybills(r).map(escape).join('、'):''}</p></section>
     <section><h3>商品</h3>${source==='magicbuy'?purchaseItems(itemList(r)):`<ul class="feed-items">${itemList(r).map(item=>`<li>${itemLabel(item)}${item.variant&&item.name!==item.variant?`<small>${escape(item.name)}</small>`:''}</li>`).join('')||'<li>商品明細待核對</li>'}</ul>`}</section>
     ${related.length?`<section><h3>運單相符的紀錄</h3><div class="drawer-list">${related.map(x=>recordLink({label:x.record.id,detail:sources[x.source].label+' · '+x.record.status,kind:'feed',id:recordKey(x.source,x.record.id)})).join('')}</div></section>`:''}
