@@ -29,6 +29,9 @@ const timestamp=value=>{
 };
 const stale=value=>Date.now()-Date.parse(value)>90*60*1000;
 const itemList=r=>Array.isArray(r.items)?r.items:[];
+const confirmedShipmentItems=r=>Array.isArray(r.confirmedShipmentItems)&&r.confirmedShipmentItems.every(item=>
+  typeof item?.sku==='string'&&item.sku.trim()&&typeof item.name==='string'&&item.name.trim()&&
+  Number.isSafeInteger(item.quantity)&&item.quantity>0)?r.confirmedShipmentItems:[];
 const itemLabel=item=>escape(item.variant||item.name)+' × '+escape(item.quantity);
 const purchaseItems=items=>items.length
   ?`<ul class="purchase-items">${items.map(item=>`<li><span class="purchase-item"><strong>${escape(item.name)}</strong><span class="purchase-quantity">× ${escape(item.quantity)}</span></span></li>`).join('')}</ul>`
@@ -103,6 +106,8 @@ function shipmentContents(row,purchases) {
   const {source,record:r}=row;
   const consolidated=source==='kkren'&&isConsolidation(r);
   const members=consolidated?parcelMembers(r):waybills(r).map(waybill=>({waybill}));
+  const shipmentItems=confirmedShipmentItems(r);
+  if(shipmentItems.length)return {parcels:members,items:shipmentItems,declared:[],pending:0,shipmentTotal:true};
   const parcels=members.map(member=>{
     const candidates=purchases.filter(p=>matchesMember(member,p.record));
     const purchase=candidates.length===1?candidates[0].record:null;
@@ -123,6 +128,9 @@ function shipmentContents(row,purchases) {
     pending:unresolved.filter(parcel=>!declaredNames(parcel).length).length+Math.max(0,(Number(r.packageCount)||0)-members.length)};
 }
 function manifestContents(contents) {
+  if(contents.shipmentTotal)return `<section><h3>集運商品（本票合計）</h3>${purchaseItems(contents.items)}
+    <h4>境內包裹</h4><ul class="feed-items">${contents.parcels.map(parcel=>
+      `<li>${escape([parcel.carrier,parcel.waybill].filter(Boolean).join(' '))}</li>`).join('')}</ul></section>`;
   return `<section><h3>集運商品</h3>${contents.parcels.map(parcel=>{
     const declared=declaredNames(parcel);
     return `<div class="feed-parcel-group"><p><b>${escape([parcel.carrier,parcel.waybill].filter(Boolean).join(' '))}</b></p>
@@ -195,7 +203,7 @@ function feedRow(row,feeds,contents) {
     const declared=contents.declared.length?`<span class="shipment-products"><b>${contents.declared.map(escape).join('、')}</b><small>巧巧郎申報品名 · 數量未核對</small></span>`:'';
     const details=[event.at?timestamp(event.at):null,shipmentLabel(source,r)].filter(Boolean).map(escape).join(' · ');
     return `<button class="record-link feed-row shipment-row" ${open}><span class="task-text">
-      ${contents.items.length?`<span class="shipment-products">${contents.items.map(item=>`<span><b>${escape(item.sku||item.source_name||item.name)}</b> × ${escape(item.quantity)}</span>`).join('')}</span>`:declared?'':'<strong>商品與數量待核對</strong>'}
+      ${contents.items.length?`<span class="shipment-products">${contents.items.map(item=>`<span><b>${escape(contents.shipmentTotal?item.name:item.sku||item.source_name||item.name)}</b> × ${escape(item.quantity)}</span>`).join('')}</span>`:declared?'':'<strong>商品與數量待核對</strong>'}
       ${declared}${pending}<span class="shipment-event">${escape(event.text)}</span><small>${details}</small></span>
       ${status}${icon('chevron')}</button>`;
   }
