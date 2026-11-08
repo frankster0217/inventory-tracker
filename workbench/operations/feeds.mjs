@@ -1,0 +1,122 @@
+import {button, chip, escape, icon, liveInventoryLink, openAttrs, recordLink} from './views.mjs?v=20261108-feeds';
+
+const sources={
+  magicbuy:{label:'MagicBuy',url:'https://www.magicbuy.com.tw/app/#/dgorder/list',view:'purchase'},
+  kkren:{label:'巧巧郎 KKren',url:'https://www.kkren.com.tw/app/index.html#/parcel',view:'parcels'},
+  sf:{label:'順豐速運',url:'https://htm.sf-express.com/tw/tc/dynamic_function/waybill/',view:'parcels'},
+  shopee_porto:{label:'Shopee · PORTO 3C',url:'https://seller.shopee.tw/portal/sale/order?type=toship&source=all',view:'shipping'},
+  shopee_voicity:{label:'Shopee · VOICity',url:'https://seller.shopee.tw/portal/sale/order?type=toship&source=all',view:'shipping'},
+};
+const pages={
+  dashboard:['營運總覽','查看最近一次查核的採購、物流和出貨。'],
+  purchase:['採購','MagicBuy 訂單與已核對的包裹。'],
+  parcels:['集運','查看巧巧郎的包裹和順豐直寄進度。'],
+  shipping:['出貨','Shopee 賣家中心的待出貨佇列。'],
+  inventory:['庫存','從既有庫存工作台查詢現有庫存。'],
+  receiving:['3PL 倉儲','物流狀態與 3PL 點收分開追蹤。'],
+};
+const stageOptions={
+  purchase:[['全部','all'],['未付款','未付款'],['已採購','已採購'],['已發貨','已發貨'],['已收貨','已收貨']],
+  parcels:[['全部','all'],['已入庫','已入庫'],['待入庫','待入庫'],['待出貨','待出貨'],['已出貨','已出貨'],['順豐直寄','sf']],
+  shipping:[['全部','all'],['PORTO 3C','shopee_porto'],['VOICity','shopee_voicity']],
+};
+const taipei=new Intl.DateTimeFormat('zh-TW',{timeZone:'Asia/Taipei',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
+const timestamp=value=>{
+  if(!value)return '時間未核對';
+  if(/^\d{4}-\d\d-\d\d \d\d:\d\d/.test(value)&&!/[+-]\d\d:?\d\d$/.test(value))return value;
+  const time=Date.parse(value);
+  return Number.isFinite(time)?taipei.format(time):'時間未核對';
+};
+const stale=value=>Date.now()-Date.parse(value)>90*60*1000;
+const itemList=r=>Array.isArray(r.items)?r.items:[];
+const itemLabel=item=>escape(item.variant||item.name)+' × '+escape(item.quantity);
+const waybills=r=>Array.isArray(r.waybills)?r.waybills:r.waybill?[r.waybill]:[];
+const recordKey=(source,id)=>source+'|'+id;
+const sourceRows=feeds=>feeds.flatMap(feed=>(Array.isArray(feed.records)?feed.records:[]).map(record=>({feed,source:feed.source,record})));
+const sourceLink=(source,r={})=>{
+  const url=source.startsWith('shopee_')&&/^\/portal\/sale\/order\/\d+$/.test(r.href??'')
+    ?'https://seller.shopee.tw'+r.href:sources[source].url;
+  return `<a class="button" href="${escape(url)}" target="_blank" rel="noopener noreferrer">${icon('link')} 開啟來源</a>`;
+};
+const badge=status=>chip(status,status==='未付款'||status==='待出貨'?'amber':status==='已入庫'?'green':'gray');
+const feedStatus=feed=>`<span class="feed-time">${escape(feed?timestamp(feed.observed_at):'等待首次查核')}${feed&&stale(feed.observed_at)?' · 更新逾時':''}</span>`;
+const searchText=r=>[r.id,r.supplier,r.status,r.route,...waybills(r),...itemList(r).flatMap(item=>[item.name,item.variant])].filter(Boolean).join(' ');
+const recordsFor=(feeds,view)=>sourceRows(feeds).filter(row=>sources[row.source]?.view===view);
+function matchesFor(feeds,source,record) {
+  const keys=waybills(record);
+  if(!keys.length||source.startsWith('shopee'))return [];
+  const candidates=sourceRows(feeds).filter(row=>row.source!==source&&
+    (source==='magicbuy'||row.source==='magicbuy')&&waybills(row.record).some(id=>keys.includes(id)));
+  if(source!=='magicbuy'&&candidates.length!==1)return [];
+  return candidates.filter(row=>!((record.route??row.record.route)==='順豐直寄台灣'&&(source==='kkren'||row.source==='kkren')));
+}
+function lineLabel(source,record) {
+  const items=itemList(record);
+  if(!items.length)return source==='magicbuy'?'商品明細待核對':record.packageCount?record.packageCount+' 個包裹':record.weight??'未核對商品明細';
+  return items.map(itemLabel).join('、');
+}
+function feedRow(row,feeds) {
+  const {source,record:r}=row;
+  const related=matchesFor(feeds,source,r);
+  const linked=related.map(x=>x.record.status).filter(Boolean).join(' · ');
+  const details=[r.supplier,r.date,r.route,r.deadline?'出貨期限 '+r.deadline:null,r.eventAt?timestamp(r.eventAt):null,linked].filter(Boolean).map(escape).join(' · ');
+  return `<button class="record-link feed-row" ${openAttrs('feed',recordKey(source,r.id))}>
+    <span class="task-text"><strong>${lineLabel(source,r)}</strong><small>${escape(r.id)}${details?' · '+details:''}</small></span>
+    ${badge(r.status??'待核對')}${icon('chevron')}</button>`;
+}
+function sourceSummary(feeds) {
+  return `<section class="card"><header class="panel-head"><h2>實際作業來源</h2></header>${Object.entries(sources).map(([source,spec])=>{
+    const feed=feeds.find(f=>f.source===source);
+    const count=feed?.records?.length;
+    return `<button class="record-link" data-go="${spec.view}" data-jump="${source.startsWith('shopee')?source:source==='sf'?'sf':'all'}"><span class="task-text"><strong>${spec.label}${Number.isInteger(count)?' · '+count+' 筆':''}</strong><small>${escape(feed?.coverage??'等待首次查核')}</small></span>${feedStatus(feed)}${icon('chevron')}</button>`;
+  }).join('')}</section>`;
+}
+export function feedView(view,state) {
+  const [title,purpose]=pages[view];
+  const {rows:feeds,status:mode,error}=state.feed;
+  const heading=`<header class="page-head"><div><h1>${title}</h1><p>${purpose}</p></div><div class="head-tools">${mode==='ready'?button('讀取最新同步','data-action="refresh-feed"','','refresh'):''}</div></header>`;
+  if(view==='inventory')return heading+`<section class="card feed-panel">${liveInventoryLink()}</section>`;
+  if(mode==='signed-out')return heading+`<section class="card feed-panel"><h2>登入 Portolink</h2><p>使用原本的庫存工作台帳號，即可查看私人採購、物流和 Shopee 訂單。</p>
+    <form id="feed-login"><label>電子郵件<input class="field" name="email" type="email" autocomplete="username" required></label><label>密碼<input class="field" name="password" type="password" autocomplete="current-password" required></label>
+    ${button('登入','','primary').replace('type="button"','type="submit"')}<p class="feed-message" role="status"></p></form></section>`;
+  if(mode!=='ready')return heading+`<section class="card feed-panel" role="status"><p>${escape(error??'正在讀取私人作業資料…')}</p>${mode==='error'?button('重新讀取','data-action="refresh-feed"','','refresh'):''}</section>`;
+  if(view==='dashboard')return heading+sourceSummary(feeds);
+  if(view==='receiving')return heading+`<section class="card feed-panel"><h2>3PL 入庫單</h2><p>從集運查核配送狀態，入庫與點收請使用既有工作表。</p>
+    ${button('查看物流','data-go="parcels"')} <a class="button" href="https://docs.google.com/spreadsheets/d/1Aoq9QANYCQfNqam4ldaoMv4q6TaqQQ-wfcadzaKdEiE/edit" target="_blank" rel="noopener noreferrer">開啟入庫單</a></section>`;
+  const rows=recordsFor(feeds,view);
+  if(view==='shipping')rows.sort((a,b)=>(a.record.deadline??'9999').localeCompare(b.record.deadline??'9999'));
+  const filter=(row,key)=>key==='all'||row.source===key||row.record.status===key;
+  const query=state.query.trim().toLocaleLowerCase();
+  const filtered=rows.filter(row=>filter(row,state.filter)&&searchText(row.record).toLocaleLowerCase().includes(query));
+  const options=stageOptions[view];
+  const feedKeys=Object.keys(sources).filter(key=>sources[key].view===view);
+  const tools=`<div class="stages" role="group" aria-label="作業狀態">${options.map(([label,key])=>`<button class="tab" type="button" data-filter="${key}" aria-pressed="${state.filter===key}">${label}<span class="tab-count">${key.startsWith('shopee')&&!feeds.some(feed=>feed.source===key)?'—':rows.filter(row=>filter(row,key)).length}</span></button>`).join('')}</div>
+    <div class="work-tools"><label class="search-field">${icon('search')}<input class="field" id="view-query" type="text" inputmode="search" placeholder="搜尋商品、訂單或運單" aria-label="搜尋商品、訂單或運單" value="${escape(state.query)}"></label></div>`;
+  const metadata=feedKeys.map(key=>{const feed=feeds.find(row=>row.source===key);return `<span>${sources[key].label} · ${feedStatus(feed)}</span>`;}).join('');
+  const notes=feeds.filter(f=>feedKeys.includes(f.source)).map(f=>f.coverage).join('。');
+  const scopeUnavailable=state.filter.startsWith('shopee')&&!feeds.some(f=>f.source===state.filter);
+  return heading+tools+`<div class="feed-metadata" aria-label="來源與更新時間">${metadata}</div>`+
+    (filtered.length?`<section class="card">${filtered.map(row=>feedRow(row,feeds)).join('')}</section>`:`<div class="empty">${!rows.length||scopeUnavailable?'等待來源查核。':'此篩選沒有符合的紀錄。'}</div>`)+
+    `<details class="feed-scope"><summary>查核範圍與原始來源</summary><p>${escape(notes||'尚未取得來源紀錄。')}</p>${feedKeys.map(key=>sourceLink(key)).join(' ')}</details>`;
+}
+export function feedDrawer(id,state) {
+  if(state.feed.status!=='ready')return null;
+  if(id==='sources')return {title:'資料來源',eyebrow:'私人資料',body:sourceSummary(state.feed.rows)};
+  const row=sourceRows(state.feed.rows).find(x=>recordKey(x.source,x.record.id)===id);
+  if(!row)return null;
+  const {source,record:r,feed}=row;
+  const related=matchesFor(state.feed.rows,source,r);
+  return {title:r.id,eyebrow:sources[source].label,body:`
+    <div class="legend">${badge(r.status??'待核對')} ${feedStatus(feed)}</div>
+    <section><h3>紀錄明細</h3><p>${[r.supplier,r.date,r.route,r.deadline?'出貨期限 '+r.deadline:null,r.eventAt?timestamp(r.eventAt):null,r.eta?'預計送達 '+r.eta:null,r.weight].filter(Boolean).map(escape).join(' · ')}</p>
+    <p>${waybills(r).length?'運單 '+waybills(r).map(escape).join('、'):''}</p></section>
+    <section><h3>商品</h3><ul class="feed-items">${itemList(r).map(item=>`<li>${itemLabel(item)}${item.variant&&item.name!==item.variant?`<small>${escape(item.name)}</small>`:''}</li>`).join('')||'<li>商品明細待核對</li>'}</ul></section>
+    ${related.length?`<section><h3>運單相符的紀錄</h3><div class="drawer-list">${related.map(x=>recordLink({label:x.record.id,detail:sources[x.source].label+' · '+x.record.status,kind:'feed',id:recordKey(x.source,x.record.id)})).join('')}</div></section>`:''}
+    <div>${sourceLink(source,r)}</div>`};
+}
+export function feedSearch(state) {
+  if(state.feed.status!=='ready')return [];
+  return sourceRows(state.feed.rows).filter(row=>sources[row.source]).map(({source,record})=>({
+    label:record.id,detail:sources[source].label+' · '+searchText(record),kind:'feed',id:recordKey(source,record.id),
+  }));
+}

@@ -1,15 +1,20 @@
 import {createDemo,products,suppliers} from './data.mjs';
 import {demoConsolidate,readSnapshot,receiptDraft,runReceiptPreview,supplierName,totalUnits,validateImport} from './model.mjs';
-import {drawerModel} from './drawers.mjs?v=20261108-ux';
-import {button,escape,icon,initialFilter,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs?v=20261108-ux';
+import {drawerModel} from './drawers.mjs?v=20261108-feeds';
+import {button,escape,icon,initialFilter,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs?v=20261108-feeds';
+
+import {feedDrawer,feedSearch,feedView} from './feeds.mjs?v=20261108-feeds';
+import {SUPABASE_URL,PUBLIC_KEY} from '../src/data.mjs';
 
 const demo=createDemo();
 const $=id=>document.getElementById(id);
 const main=$('main'),drawer=$('drawer'),search=$('search-dialog');
+const liveMode=location.protocol==='https:'&&new URLSearchParams(location.search).get('demo')!=='1';
 const state={
+  liveMode,feed:{status:'loading',rows:[],error:null},
   localPreview:['127.0.0.1','localhost'].includes(location.hostname),
   view:views[location.hash.slice(1)]?location.hash.slice(1):'dashboard',
-  filter:initialFilter(location.hash.slice(1)),query:'',sort:'sku',channel:'',category:'',page:1,gallery:'gallery',inventoryMode:'demo',
+  filter:liveMode?'all':initialFilter(location.hash.slice(1)),query:'',sort:'sku',channel:'',category:'',page:1,gallery:'gallery',inventoryMode:'demo',
   snapshot:null,snapshotItems:[],snapshotError:null,products,selected:{inventory:new Set(),shipping:new Set(),parcels:new Set()},
   ledger:new Map(),collapsed:false,
 };
@@ -20,7 +25,7 @@ const openButton=(label,glyph,kind)=>`<button class="icon-btn" aria-label="${lab
 function renderShell(){
   document.querySelector('.shell').classList.toggle('collapsed',state.collapsed);
   const active=key=>state.view===key?'aria-current="page"':'';
-  const previewLabel='示例資料';
+  const previewLabel=liveMode?'私人資料':'示例資料';
   $('sidebar').innerHTML=`<a class="brand" href="#dashboard" data-go="dashboard" aria-label="Portolink Operations 首頁">${brandMark}<span class="brand-text"><span class="brand-name">Portolink</span><span class="brand-sub">Operations</span></span></a>
     <nav class="side-links" aria-label="主導覽">
     ${modules.map(([key,label])=>`<button class="side-link" type="button" data-go="${key}" aria-label="${label}" title="${label}" ${active(key)}>${icon(key)}<span class="side-copy">${label}</span></button>`).join('')}</nav>
@@ -28,7 +33,7 @@ function renderShell(){
     <span class="side-company">PORTO 3C / VOICity</span></div>`;
   $('topbar').innerHTML=`<a class="top-brand" href="#dashboard" data-go="dashboard" aria-label="Portolink 首頁">${brandMark}Portolink</a>
     <button class="search-trigger" type="button" data-action="search" aria-label="全域搜尋">${icon('search')}<span>全域搜尋</span><kbd>⌘ K</kbd></button>
-    <div class="top-actions"><button class="source-label" ${openAttrs('sources','')} aria-label="示例資料 · 查看來源"><i></i>${previewLabel}</button>${openButton('通知','bell','notifications')}</div>`;
+    <div class="top-actions"><button class="source-label" ${openAttrs('sources','')} aria-label="${previewLabel} · 查看來源"><i></i>${previewLabel}</button>${openButton('通知','bell','notifications')}</div>`;
   const order=['dashboard','inventory','purchase','shipping'];
   $('mobile-nav').innerHTML=order.map(key=>{
     const [,label,,short]=modules.find(x=>x[0]===key);
@@ -39,7 +44,7 @@ function renderMain(){
   const sameView=main.dataset.view===state.view;
   const openDetails=new Set(sameView?[...main.querySelectorAll('details[open][data-disclosure]')].map(el=>el.dataset.disclosure):[]);
   main.dataset.view=state.view;
-  main.innerHTML=views[state.view](state,demo);
+  main.innerHTML=liveMode?feedView(state.view,state):views[state.view](state,demo);
   for(const el of main.querySelectorAll('details[data-disclosure]'))el.open=openDetails.has(el.dataset.disclosure);
 }
 function render(){renderShell();renderMain();}
@@ -47,7 +52,7 @@ function closePanels(){
   if(drawer.open)drawer.close();
   if(search.open)search.close();
 }
-function navigate(view,filter=initialFilter(view),options={}){
+function navigate(view,filter=liveMode?'all':initialFilter(view),options={}){
   if(!views[view])return;
   closePanels();
   state.view=view;
@@ -62,7 +67,8 @@ function navigate(view,filter=initialFilter(view),options={}){
 window.addEventListener('hashchange',()=>navigate(location.hash.slice(1)||'dashboard'));
 
 function renderDrawer(kind,id){
-  const content=drawerModel(kind,id,state,demo);
+  const content=liveMode&&['feed','sources','notifications'].includes(kind)
+    ?feedDrawer(kind==='feed'?id:'sources',state):drawerModel(kind,id,state,demo);
   if(!content)return;
   const alreadyOpen=drawer.open;
   if(search.open)search.close();
@@ -76,6 +82,7 @@ for(const panel of [drawer,search]){
 }
 
 function searchIndex(){
+  if(liveMode)return feedSearch(state);
   return [
     ...products.map(p=>({label:p.sku,detail:p.brand+' · '+p.name+' · 示例',sku:p.sku,kind:'product',id:p.sku})),
     ...demo.purchase.map(o=>({label:o.id,detail:o.source+' · '+supplierName(o.supplier)+' · '+o.lines.map(l=>l.sku).join(' '),glyph:'purchase',kind:'purchase',id:o.id})),
@@ -129,6 +136,7 @@ const csv=(filename,rows)=>download(filename,'\uFEFF'+rows.map(row=>row.map(csvV
 const inboundHeader=['單號','商品編號','商品名稱','規格','位置','數量','明細備註'];
 
 const actions={
+  'refresh-feed':()=>void refreshFeed(),
   sidebar:()=>{state.collapsed=!state.collapsed;renderShell();$('sidebar').querySelector('[data-action="sidebar"]').focus();},
   search:openSearch,
   'close-drawer':()=>drawer.close(),
@@ -174,7 +182,7 @@ document.addEventListener('click',event=>{
   const element=event.target.closest('button,a[data-go]');
   if(!element)return;
   const d=element.dataset;
-  if(d.go){event.preventDefault();navigate(d.go,d.jump||initialFilter(d.go),{snapshot:d.snapshot==='true'});return;}
+  if(d.go){event.preventDefault();navigate(d.go,d.jump||(liveMode?'all':initialFilter(d.go)),{snapshot:d.snapshot==='true'});return;}
   if(d.open){renderDrawer(d.open,d.id);return;}
   if(d.action){actions[d.action]?.(element);return;}
   if(d.filter){state.filter=d.filter;state.page=1;renderMain();main.querySelector('[aria-pressed="true"].tab')?.focus({preventScroll:true});return;}
@@ -256,6 +264,69 @@ document.addEventListener('submit',event=>{
   renderDrawer('receiving',id);
   announce(record.status==='received'?'點收演練完成。':'已記錄數量差異。');
 });
+
+let feedClient, feedRequest=0;
+async function refreshFeed(){
+  if(!liveMode)return;
+  const request=++feedRequest;
+  try{
+    if(!window.supabase)throw Error('登入元件載入失敗，請重新整理。');
+    if(!feedClient){
+      feedClient=window.supabase.createClient(SUPABASE_URL,PUBLIC_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
+      feedClient.auth.onAuthStateChange(event=>{
+        if(event==='SIGNED_OUT'){
+          feedRequest++;
+          Object.assign(state.feed,{status:'signed-out',rows:[],error:null});
+          closePanels();
+          renderMain();
+        }
+      });
+    }
+    const {data:{session},error:sessionError}=await feedClient.auth.getSession();
+    if(request!==feedRequest)return;
+    if(sessionError)throw Error('無法確認登入狀態，請重新整理。');
+    if(!session){
+      Object.assign(state.feed,{status:'signed-out',rows:[],error:null});
+      closePanels();
+      renderMain();
+      return;
+    }
+    const {data,error}=await feedClient.from('portolink_source_feeds').select('source,observed_at,coverage,records');
+    if(request!==feedRequest)return;
+    if(error||!Array.isArray(data))throw Error('私人作業資料讀取失敗，請重試。');
+    Object.assign(state.feed,{status:'ready',rows:data,error:null});
+    renderMain();
+  }catch(error){
+    if(request!==feedRequest)return;
+    Object.assign(state.feed,{status:'error',rows:[],error:error.message});
+    closePanels();
+    renderMain();
+  }
+}
+document.addEventListener('submit',async event=>{
+  const form=event.target;
+  if(form.id!=='feed-login'||!feedClient)return;
+  event.preventDefault();
+  const fields=new FormData(form);
+  const submit=form.querySelector('button[type=submit]');
+  const message=form.querySelector('[role=status]');
+  submit.disabled=true;
+  message.textContent='登入中…';
+  try{
+    const {error}=await feedClient.auth.signInWithPassword({email:String(fields.get('email')).trim(),password:String(fields.get('password'))});
+    if(error){message.textContent='登入失敗，請檢查庫存工作台帳號和密碼。';return;}
+    await refreshFeed();
+  }catch{
+    message.textContent='暫時無法登入，請重試。';
+  }finally{
+    form.elements.password.value='';
+    submit.disabled=false;
+  }
+});
+if(liveMode){
+  window.addEventListener('load',()=>void refreshFeed(),{once:true});
+  window.addEventListener('focus',()=>{if(!drawer.open&&!search.open&&state.feed.status==='ready')void refreshFeed();});
+}
 
 async function openSnapshot(){
   if(!state.localPreview)return;

@@ -339,3 +339,18 @@ dialog::backdrop { background: #26282264; }
   @keyframes enter-drawer { from { transform: translateX(18px); opacity: .7; } to { transform: none; opacity: 1; } }
   .button, .side-link, .record-link, .task-row { transition: background-color .14s ease, border-color .14s ease; }
 }
+
+.feed-panel { max-width: 560px; padding: 18px; }
+.feed-panel p { color: var(--sub); margin: 8px 0 12px; }
+#feed-login { display: grid; gap: 12px; max-width: 360px; }
+#feed-login label { display: grid; gap: 4px; }
+#feed-login button { justify-self: start; }
+#feed-login .feed-message:empty { display: none; }
+.feed-metadata { display: flex; flex-wrap: wrap; gap: 5px 20px; font-size: 14px; color: var(--sub); margin-bottom: 10px; }
+.feed-time { color: var(--sub); font-size: 14px; }
+.feed-row .status { max-width: 120px; text-align: left; }
+.feed-scope { margin-top: 12px; color: var(--sub); }
+.feed-scope summary { min-height: 44px; padding: 10px 0; }
+.feed-scope p { margin: 4px 0 9px; }
+.feed-items { padding-inline-start: 20px; }
+.feed-items small { display: block; color: var(--sub); }
