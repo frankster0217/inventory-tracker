@@ -30,6 +30,9 @@ const timestamp=value=>{
 const stale=value=>Date.now()-Date.parse(value)>90*60*1000;
 const itemList=r=>Array.isArray(r.items)?r.items:[];
 const itemLabel=item=>escape(item.variant||item.name)+' × '+escape(item.quantity);
+const purchaseItems=items=>items.length
+  ?`<ul class="purchase-items">${items.map(item=>`<li><span class="purchase-item"><span>${escape(item.name)}</span><span class="purchase-quantity">× ${escape(item.quantity)}</span></span></li>`).join('')}</ul>`
+  :'<strong>商品明細待核對</strong>';
 const waybills=r=>Array.isArray(r.waybills)?r.waybills:r.waybill?[r.waybill]:[];
 const recordKey=(source,id)=>source+'|'+id;
 const sourceRows=feeds=>feeds.flatMap(feed=>(Array.isArray(feed.records)?feed.records:[]).map(record=>({feed,source:feed.source,record})));
@@ -40,7 +43,7 @@ const sourceLink=(source,r={})=>{
 };
 const badge=status=>chip(status,status==='未付款'||status==='待出貨'?'amber':status==='已入庫'?'green':'gray');
 const feedStatus=feed=>`<span class="feed-time">${escape(feed?timestamp(feed.observed_at):'等待首次查核')}${feed&&stale(feed.observed_at)?' · 更新逾時':''}</span>`;
-const searchText=r=>[r.id,r.supplier,r.status,r.route,...waybills(r),...itemList(r).flatMap(item=>[item.name,item.variant])].filter(Boolean).join(' ');
+const searchText=r=>[r.id,r.supplier,r.status,r.route,...waybills(r),...itemList(r).flatMap(item=>[item.name,item.variant,item.sku,item.source_name])].filter(Boolean).join(' ');
 const recordsFor=(feeds,view)=>sourceRows(feeds).filter(row=>sources[row.source]?.view===view);
 function matchesFor(feeds,source,record) {
   const keys=waybills(record);
@@ -50,9 +53,9 @@ function matchesFor(feeds,source,record) {
   if(source!=='magicbuy'&&candidates.length!==1)return [];
   return candidates.filter(row=>!((record.route??row.record.route)==='順豐直寄台灣'&&(source==='kkren'||row.source==='kkren')));
 }
-function lineLabel(source,record) {
+function lineLabel(record) {
   const items=itemList(record);
-  if(!items.length)return source==='magicbuy'?'商品明細待核對':record.packageCount?record.packageCount+' 個包裹':record.weight??'未核對商品明細';
+  if(!items.length)return record.packageCount?record.packageCount+' 個包裹':record.weight??'未核對商品明細';
   return items.map(itemLabel).join('、');
 }
 function feedRow(row,feeds) {
@@ -60,9 +63,15 @@ function feedRow(row,feeds) {
   const related=matchesFor(feeds,source,r);
   const linked=related.map(x=>x.record.status).filter(Boolean).join(' · ');
   const details=[r.supplier,r.date,r.route,r.deadline?'出貨期限 '+r.deadline:null,r.eventAt?timestamp(r.eventAt):null,linked].filter(Boolean).map(escape).join(' · ');
-  return `<button class="record-link feed-row" ${openAttrs('feed',recordKey(source,r.id))}>
-    <span class="task-text"><strong>${lineLabel(source,r)}</strong><small>${escape(r.id)}${details?' · '+details:''}</small></span>
-    ${badge(r.status??'待核對')}${icon('chevron')}</button>`;
+  const meta=`<small>${escape(r.id)}${details?' · '+details:''}</small>`;
+  const status=badge(r.status??'待核對');
+  const open=openAttrs('feed',recordKey(source,r.id));
+  if(source==='magicbuy')return `<div class="record-link feed-row purchase-order">
+    <div class="task-text">${purchaseItems(itemList(r))}${meta}</div>
+    <button class="purchase-open" type="button" ${open} aria-label="查看訂單 ${escape(r.id)}，${escape(r.status??'待核對')}">${status}${icon('chevron')}</button></div>`;
+  return `<button class="record-link feed-row" ${open}>
+    <span class="task-text"><strong>${lineLabel(r)}</strong>${meta}</span>
+    ${status}${icon('chevron')}</button>`;
 }
 function sourceSummary(feeds) {
   return `<section class="card"><header class="panel-head"><h2>實際作業來源</h2></header>${Object.entries(sources).map(([source,spec])=>{
@@ -110,7 +119,7 @@ export function feedDrawer(id,state) {
     <div class="legend">${badge(r.status??'待核對')} ${feedStatus(feed)}</div>
     <section><h3>紀錄明細</h3><p>${[r.supplier,r.date,r.route,r.deadline?'出貨期限 '+r.deadline:null,r.eventAt?timestamp(r.eventAt):null,r.eta?'預計送達 '+r.eta:null,r.weight].filter(Boolean).map(escape).join(' · ')}</p>
     <p>${waybills(r).length?'運單 '+waybills(r).map(escape).join('、'):''}</p></section>
-    <section><h3>商品</h3><ul class="feed-items">${itemList(r).map(item=>`<li>${itemLabel(item)}${item.variant&&item.name!==item.variant?`<small>${escape(item.name)}</small>`:''}</li>`).join('')||'<li>商品明細待核對</li>'}</ul></section>
+    <section><h3>商品</h3>${source==='magicbuy'?purchaseItems(itemList(r)):`<ul class="feed-items">${itemList(r).map(item=>`<li>${itemLabel(item)}${item.variant&&item.name!==item.variant?`<small>${escape(item.name)}</small>`:''}</li>`).join('')||'<li>商品明細待核對</li>'}</ul>`}</section>
     ${related.length?`<section><h3>運單相符的紀錄</h3><div class="drawer-list">${related.map(x=>recordLink({label:x.record.id,detail:sources[x.source].label+' · '+x.record.status,kind:'feed',id:recordKey(x.source,x.record.id)})).join('')}</div></section>`:''}
     <div>${sourceLink(source,r)}</div>`};
 }

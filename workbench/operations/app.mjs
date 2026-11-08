@@ -3,7 +3,7 @@ import {demoConsolidate,readSnapshot,receiptDraft,runReceiptPreview,supplierName
 import {drawerModel} from './drawers.mjs?v=20261108-feeds';
 import {button,escape,icon,initialFilter,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs?v=20261108-feeds';
 
-import {feedDrawer,feedSearch,feedView} from './feeds.mjs?v=20261108-feeds';
+import {feedDrawer,feedSearch,feedView} from './feeds.mjs?v=20261108-purchase-list';
 import {SUPABASE_URL,PUBLIC_KEY} from '../src/data.mjs';
 
 const demo=createDemo();
