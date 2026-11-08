@@ -83,8 +83,8 @@ function feedRow(row,feeds) {
   const status=badge(r.status??'待核對');
   const open=openAttrs('feed',recordKey(source,r.id));
   if(source==='magicbuy')return `<div class="record-link feed-row purchase-order">
-    ${purchaseMeta(r)}
     <div class="purchase-products">${purchaseItems(itemList(r))}${linked?`<p class="purchase-tracking">${escape(linked)}</p>`:''}</div>
+    ${purchaseMeta(r)}
     <button class="purchase-open" type="button" ${open} aria-label="查看訂單 ${escape(r.id)}，${escape(r.status??'待核對')}">${status}${icon('chevron')}</button></div>`;
   return `<button class="record-link feed-row" ${open}>
     <span class="task-text"><strong>${lineLabel(r)}</strong>${meta}</span>
@@ -132,11 +132,14 @@ export function feedDrawer(id,state) {
   if(!row)return null;
   const {source,record:r,feed}=row;
   const related=matchesFor(state.feed.rows,source,r);
-  return {title:source==='magicbuy'?'採購明細':r.id,eyebrow:sources[source].label,body:`
+  const isPurchase=source==='magicbuy';
+  const products=`<section><h3>商品</h3>${isPurchase?purchaseItems(itemList(r)):`<ul class="feed-items">${itemList(r).map(item=>`<li>${itemLabel(item)}${item.variant&&item.name!==item.variant?`<small>${escape(item.name)}</small>`:''}</li>`).join('')||'<li>商品明細待核對</li>'}</ul>`}</section>`;
+  return {title:isPurchase?'採購明細':r.id,eyebrow:sources[source].label,body:`
     <div class="legend">${badge(r.status??'待核對')} ${feedStatus(feed)}</div>
-    <section><h3>紀錄明細</h3>${source==='magicbuy'?purchaseMeta(r):`<p>${[r.supplier,r.date,r.route,r.deadline?'出貨期限 '+r.deadline:null,r.eventAt?timestamp(r.eventAt):null,r.eta?'預計送達 '+r.eta:null,r.weight].filter(Boolean).map(escape).join(' · ')}</p>`}
+    ${isPurchase?products:''}
+    <section><h3>紀錄明細</h3>${isPurchase?purchaseMeta(r):`<p>${[r.supplier,r.date,r.route,r.deadline?'出貨期限 '+r.deadline:null,r.eventAt?timestamp(r.eventAt):null,r.eta?'預計送達 '+r.eta:null,r.weight].filter(Boolean).map(escape).join(' · ')}</p>`}
     <p>${waybills(r).length?'運單 '+waybills(r).map(escape).join('、'):''}</p></section>
-    <section><h3>商品</h3>${source==='magicbuy'?purchaseItems(itemList(r)):`<ul class="feed-items">${itemList(r).map(item=>`<li>${itemLabel(item)}${item.variant&&item.name!==item.variant?`<small>${escape(item.name)}</small>`:''}</li>`).join('')||'<li>商品明細待核對</li>'}</ul>`}</section>
+    ${isPurchase?'':products}
     ${related.length?`<section><h3>運單相符的紀錄</h3><div class="drawer-list">${related.map(x=>recordLink({label:x.record.id,detail:sources[x.source].label+' · '+x.record.status,kind:'feed',id:recordKey(x.source,x.record.id)})).join('')}</div></section>`:''}
     <div>${sourceLink(source,r)}</div>`};
 }
