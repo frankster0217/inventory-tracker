@@ -1,5 +1,5 @@
 import {categories, demoDay, knownProducts, routes, status, suppliers} from './data.mjs';
-import {demoStock, supplierName, totalUnits} from './model.mjs';
+import {demoStock, receiptDraft, supplierName, totalUnits} from './model.mjs';
 
 const paths = {
   mark:'<path d="M5 19V5h8a4 4 0 0 1 0 8H9m-4 2h10"/>',
@@ -56,46 +56,41 @@ export const modules = [
   ['parcels','集運','Consolidation','集運'],
   ['receiving','3PL 倉儲','Warehouse','倉儲'],
 ];
-const titles = {
-  dashboard:['營運總覽','PORTO 3C / VOICity'],
-  inventory:['庫存','商品主檔、實體庫存與通路對應。'],
-  shipping:['出貨','從訂單檢查、標籤到 3PL 提交。'],
-  purchase:['採購','管理採購單、供應商與在途商品。'],
-  parcels:['集運','追蹤供應商包裹、合箱與台灣配送。'],
-  receiving:['3PL 倉儲','核對到貨、入庫單及倉庫點收。'],
+const titles = Object.fromEntries(modules.map(([key,label])=>[key,label]));
+const purposes = {
+  shipping:'檢查訂單、備妥標籤，再交給 3PL。',
+  purchase:'查看供應商、付款和到貨進度。',
+  parcels:'追蹤包裹，查看哪些已可集運。',
+  receiving:'核對到貨、入庫單與倉庫點收。',
 };
+export const initialFilter = view => ({shipping:'process',parcels:'ready',receiving:'today'}[view]??'all');
 
 const match = (entry,query) => !query || entry.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
 const itemCodes = record => record.lines.map(l=>l.sku).join(' ');
 export const moduleInventory = (state,demo) => state.inventoryMode==='snapshot'?state.snapshotItems:state.products.map(product=>demoStock(product,demo));
-const inventoryTabs = [['all','全部商品'],['categories','商品分類'],['master','商品主檔'],['movement','庫存異動'],['low','低庫存預警'],['channels','上架通路']];
+const inventoryViews = [['all','全部商品'],['categories','商品分類'],['master','商品主檔'],['movement','庫存異動'],['channels','上架通路']];
 const stockTabs = [['low','低庫存'],['immediate','立即補貨'],['replenish','建議補貨'],['incoming','採購在途'],['zero','缺貨'],['sufficient','暫不需補貨']];
-const shippingTabs = [['all','全部訂單'],['process','待處理'],['label','待下載標籤'],['handoff','待交 3PL'],['shipped','已出貨'],['hold','出貨異常'],['history','歷史紀錄']];
-const purchaseTabs = [['all','全部採購訂單'],['payment','待付款'],['seller','待賣家出貨'],['sent','已出貨'],['missing','採購異常'],['suppliers','供應商管理'],['history','採購歷史']];
-const parcelTabs = [['all','全部包裹'],['waiting','待到漳州倉'],['storage','已到漳州倉'],['ready','待集運'],['grouped','已合箱'],['international','運輸中'],['delivery','台灣配送中'],['delivered','已送達'],['exception','物流異常']];
-const receivingTabs = [['all','入庫預告'],['today','今日到貨'],['announce','待填入庫單'],['warehouse','待倉庫確認'],['received','已完成入庫'],['mismatch','入庫異常'],['ledger','Google Sheets 紀錄']];
-const tabs = (list,current,label='顯示範圍') => `<div class="tabs" role="group" aria-label="${label}">${list.map(([value,text])=>`<button class="tab" type="button" data-filter="${value}" aria-pressed="${current===value}">${text}</button>`).join('')}</div>
-  <label class="mobile-filter"><span>${label}</span><select class="select" data-filter-select>${list.map(([value,text])=>`<option value="${value}" ${current===value?'selected':''}>${text}</option>`).join('')}</select></label>`;
+const stages = (list,current,count) => `<div class="stages" role="group" aria-label="作業狀態">${list.map(([value,label])=>`<button class="tab" type="button" data-filter="${value}" aria-pressed="${current===value}">${label}<span class="tab-count">${count(value)}</span></button>`).join('')}</div>`;
 const toggle = (options,current,action) => `<div class="toggle" role="group" aria-label="顯示方式">${options.map(([value,label,glyph])=>`<button data-${action}="${value}" aria-pressed="${current===value}">${glyph?icon(glyph):''}${label}</button>`).join('')}</div>`;
-const field = (value,label='搜尋目前清單') => `<input type="search" class="field search-field" aria-label="${label}" placeholder="${label}" id="view-query" value="${escape(value)}">`;
+const field = (value,label='搜尋目前清單') => `<label class="search-field">${icon('search')}<input type="text" inputmode="search" class="field" aria-label="${label}" placeholder="${label}" id="view-query" value="${escape(value)}"></label>`;
 const select = (id,title,options,current) => `<select id="${id}" class="select" aria-label="${title}">${options.map(([value,label])=>`<option value="${escape(value)}" ${value===current?'selected':''}>${escape(label)}</option>`).join('')}</select>`;
-const table = (headers,rows,mobileFields) => `<div class="table-shell card" tabindex="0" aria-label="資料表"><table class="table responsive-rows"><thead><tr>${headers.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(row=>`<tr>${row.map((col,index)=>`<td${mobileFields&&!mobileFields.includes(index)?' class="mobile-extra"':''}><span class="mobile-column" aria-hidden="true">${headers[index].startsWith('<input')?'選取':headers[index]}</span>${col}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+const filterSelect = (label,list,current) => `<select class="select" data-filter-select aria-label="${label}">${list.some(([key])=>key===current)?'':'<option value="" disabled selected>選擇檢視</option>'}${list.map(([value,text])=>`<option value="${value}" ${current===value?'selected':''}>${text}</option>`).join('')}</select>`;
+const toolbar = (query,label,controls='',advanced='') => `<div class="work-tools"><div class="filters">${field(query,label)}${controls}</div>${advanced?`<details class="extra-filters" data-disclosure="filters"><summary>篩選與排序</summary><div class="chips">${advanced}</div></details>`:''}</div>`;
+const table = (headers,rows,layout='ledger',fields=[]) => `<div class="table-shell card" data-layout="${layout}" role="region" aria-label="資料表" tabindex="0"><table class="table responsive-rows" role="table"><thead role="rowgroup"><tr role="row">${headers.map((h,index)=>`<th role="columnheader" scope="col" data-cell="${fields[index]??''}">${h}</th>`).join('')}</tr></thead><tbody role="rowgroup">${rows.map(row=>`<tr role="row">${row.map((col,index)=>`<td role="cell" data-cell="${fields[index]??''}">${col}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 const cardPanel = (title,items,action='') => `<section class="card"><header class="panel-head"><h2>${title}</h2>${action}</header>${items}</section>`;
 export function recordLink({label,detail='',glyph='link',sku,kind,id,mark=''}) {
   return `<button class="record-link" ${openAttrs(kind,id)}>${sku?shortProduct(sku):`<span class="kpi-icon">${icon(glyph)}</span>`}<span class="task-text"><strong>${escape(label)}</strong><small>${escape(detail)}</small></span>${mark}${icon('chevron')}</button>`;
 }
-const tick = (kind,id,state,label) => `<input type="checkbox" aria-label="${escape(label)}" data-pick="${kind}" value="${escape(id)}" ${state.selected[kind].has(id)?'checked':''}>`;
+const tick = (kind,id,state,label) => `${kind==='parcels'?'':'<label class="pick-target">'}<input type="checkbox" aria-label="${escape(label)}" data-pick="${kind}" value="${escape(id)}" ${state.selected[kind].has(id)?'checked':''}>${kind==='parcels'?'':'</label>'}`;
 const total = lines => fmt(totalUnits(lines));
-const itemCell = lines => `<div class="product-cell">${shortProduct(lines[0]?.sku)}<div class="cell-stack">${lines.map(x=>prodLink(x.sku)).join('')}</div></div>`;
+const itemCell = lines => `<div class="product-cell">${shortProduct(lines[0]?.sku)}<div class="cell-stack">${lines.map(x=>`<span class="line-item">${prodLink(x.sku)}<span class="line-qty"> ×${fmt(x.qty)}</span></span>`).join('')}</div></div>`;
 const sourceForReceiving = (row,demo) => row.kind==='batch'?demo.batches.find(x=>x.id===row.ref):demo.parcels.find(x=>x.id===row.ref);
-const latest = record => record.events.at(-1);
-const titleHeader = (view,tools='') => {
-  return `<header class="page-head"><div><h1>${titles[view][0]}</h1><p>${titles[view][1]}</p></div><div class="head-tools">${tools}</div></header>`;
-};
-
+const titleHeader = (view,tools='') => `<header class="page-head"><div><h1>${titles[view]}</h1>${purposes[view]?`<p>${purposes[view]}</p>`:''}</div>${tools?`<div class="head-tools">${tools}</div>`:''}</header>`;
+const actionLink = (label,kind,id) => button(label,`${openAttrs(kind,id)} aria-label="${escape(label+' '+id)}"`,'row-action','chevron');
+const recordIdentity = (label,kind,id,detail) => `<div class="cell-stack">${rowLink(label,kind,id)}<small>${escape(detail)}</small></div>`;
 export function taskItems(demo) {
   const tasks=[];
-  for(const p of demo.receiving.filter(r=>r.status==='announce'&&r.date===demoDay)){
+  for(const p of demo.receiving.filter(r=>r.status==='announce'&&receiptDraft(r,sourceForReceiving(r,demo)).allowed)){
     const products=p.lines.map(l=>l.sku+' × '+l.qty).join('、');
     const delivery=p.carrier==='delivered'?'今天已送達 3PL':'今天配送至 3PL';
     tasks.push({title:'準備今日入庫單',subtitle:products+' · '+delivery,action:'查看入庫單',mark:delivery,tone:'amber',ref:['receiving',p.id],sku:p.lines[0].sku});
@@ -107,6 +102,7 @@ export function taskItems(demo) {
     const [title,mark]=hold?['核對出貨異常',p.error]:p.status==='handoff'?['準備交給 3PL','標籤已備妥']:['下載出貨標籤','待下載'];
     tasks.push({title,subtitle:p.source+' · '+(hold?p.error:p.lines[0].sku)+due,action:'查看訂單',mark,tone:hold?'red':'blue',ref:['shipping',p.id],sku:p.lines[0].sku});
   }
+  for(const p of demo.parcels.filter(p=>p.status==='ready'&&!p.batch)) tasks.push({title:'漳州倉包裹待集運',subtitle:p.lines.map(l=>l.sku+' × '+l.qty).join('、')+' · '+p.id,action:'查看包裹',mark:'待集運',tone:'amber',ref:['parcel',p.id],sku:p.lines[0].sku});
   for(const p of demo.receiving.filter(r=>r.status==='warehouse')) tasks.push({title:'確認倉庫點收',subtitle:totalUnits(p.lines)+' 件已送達 · 等待倉庫確認',action:'查看入庫單',mark:'已送達',tone:'green',ref:['receiving',p.id],sku:p.lines[0].sku});
   for(const p of demo.purchase.filter(r=>r.status==='missing')) tasks.push({title:'核對賣家物流單號',subtitle:p.lines[0].sku+' · '+supplierName(p.supplier),action:'查看採購單',mark:'資料缺少',tone:'red',ref:['purchase',p.id],sku:p.lines[0].sku});
   for(const p of demo.purchase.filter(r=>r.status==='payment')) tasks.push({title:'查看待付款採購單',subtitle:p.lines[0].sku+' · '+p.source,action:'查看採購單',mark:'待付款',tone:'amber',ref:['purchase',p.id],sku:p.lines[0].sku});
@@ -116,45 +112,31 @@ export function activityRows(demo) {
   return demo.activity.map(a=>`<button class="activity-row" ${openAttrs(...a.ref)}><span class="kpi-icon green">${icon(a.icon)}</span><span class="task-text"><strong>${escape(a.title)}</strong><small>${escape(a.detail)}</small></span><time>${a.time}</time></button>`).join('');
 }
 export function dashboard(state,demo) {
+  const tasks=taskItems(demo);
   const arrivals=demo.receiving.filter(r=>r.date===demoDay);
-  const [first,...remaining]=taskItems(demo);
   const stock=state.products.map(p=>demoStock(p,demo));
-  const replenish=stock.filter(p=>p.suggestion>=5);
-  const ship=demo.shipping.filter(o=>o.status!=='shipped');
-  const delivered=arrivals.filter(x=>x.carrier==='delivered').length;
-  const delivery=arrivals.filter(x=>x.carrier==='delivery').length;
-  const shortcuts=[
-    ['查看今日到貨',delivery+' 批配送中，'+delivered+' 批已送達','receiving','receiving','today'],
-    ['查看建議補貨',replenish.length+' 項商品需要補貨','inventory','inventory','replenish'],
-    ['查看出貨清單',ship.length+' 筆訂單待處理','shipping','shipping','process'],
+  const warnings=stock.filter(p=>p.available<=p.threshold).sort((a,b)=>a.available-b.available);
+  const summaries=[
+    ['出貨待辦',demo.shipping.filter(o=>o.status!=='shipped').length,'shipping','all'],
+    ['今日到貨',arrivals.length,'receiving','today'],
+    ['待集運',demo.parcels.filter(p=>p.status==='ready').length,'parcels','ready'],
+    ['低庫存',warnings.length,'inventory','low'],
   ];
-  const stageSets=[
-    ['採購','purchase',[['payment','待付款'],['seller','待出貨'],['sent','已出貨'],['missing','缺少物流單號']],demo.purchase],
-    ['集運','parcels',[['waiting','待到漳州倉'],['storage','已到漳州倉',demo.parcels.filter(p=>['storage','ready'].includes(p.status)).length],['ready','待集運'],['international','國際運輸中']],demo.parcels],
-    ['3PL 入庫','receiving',[['carrier-delivered','今日已送達',arrivals.filter(x=>x.carrier==='delivered').length],['carrier-delivery','今日配送中',arrivals.filter(x=>x.carrier==='delivery').length],['announce','待填入庫單'],['warehouse','待倉庫確認'],['mismatch','入庫異常']],demo.receiving],
-    ['庫存','inventory',[['low','低庫存',stock.filter(x=>x.available<=x.threshold).length],['replenish','建議補貨',replenish.length],['zero','缺貨商品',stock.filter(x=>x.available===0).length],['incoming','採購在途',stock.reduce((sum,x)=>sum+x.incoming,0)]],[]],
-    ['出貨','shipping',[['process','今日待出貨',ship.length],['label','待下載標籤'],['handoff','待交 3PL'],['hold','出貨異常']],demo.shipping],
-  ];
-  const taskRow=t=>`<button class="task-row" ${openAttrs(...t.ref)}>${shortProduct(t.sku)}<span class="task-text"><strong>${escape(t.title)}</strong><small>${escape(t.subtitle)}</small></span>${icon('chevron')}</button>`;
+  const taskRow=(task,index)=>`<button class="task-row ${index===0?'priority':''}" ${openAttrs(...task.ref)}>
+    ${shortProduct(task.sku)}<span class="task-text">${index===0?'<span class="priority-label">優先處理</span>':''}<strong>${escape(task.title)}</strong><small>${escape(task.subtitle)}</small></span><span class="task-action">${task.action}</span>${icon('chevron')}</button>`;
   return `<div class="today-view">
-    <header class="page-head today-head"><div><h1>今日工作</h1><p>11 月 6 日・示例作業日</p></div></header>
-    ${first?`<section class="first-task" aria-labelledby="first-title">
-      <div><p class="first-label">先處理</p><h2 id="first-title">${escape(first.title)}</h2><p class="first-description">${escape(first.subtitle)}</p>
-      ${button(first.action,openAttrs(...first.ref),'primary','arrow')}</div>
-      ${photo(knownProducts.get(first.sku),'thumb first-photo')}
-    </section>`:empty('目前沒有待辦事項。')}
+    <header class="page-head today-head"><div><h1>今日工作</h1><p>11 月 6 日 · 示例作業日</p></div></header>
+    <div class="day-summary card" aria-label="今日摘要">${summaries.map(([label,count,view,filter])=>`<button ${goAttrs(view,filter)}>${icon(view)}<span>${label}</span><b>${count}</b></button>`).join('')}</div>
+    <section class="card task-list"><header class="panel-head"><h2>需要處理</h2><span class="muted">${tasks.length} 項</span></header>
+      ${tasks.length?tasks.slice(0,3).map(taskRow).join(''):empty('目前沒有待辦事項。')}
+      ${tasks.length>3?`<details class="task-more" data-disclosure="tasks"><summary>其他 ${tasks.length-3} 項待辦</summary>${tasks.slice(3).map(task=>taskRow(task,1)).join('')}</details>`:''}
+    </section>
     <div class="dashboard-grid">
-      ${remaining.length?`<section class="card"><header class="panel-head"><h2>接著處理</h2></header>
-        ${remaining.slice(0,2).map(taskRow).join('')}
-        ${remaining.length>2?`<details class="task-more"><summary>查看其他 ${remaining.length-2} 項待辦</summary>${remaining.slice(2).map(taskRow).join('')}</details>`:''}
-      </section>`:''}
-      ${cardPanel('查看進度',shortcuts.map(([title,detail,glyph,view,filter])=>`<button class="record-link" ${goAttrs(view,filter)}><span class="kpi-icon">${icon(glyph)}</span><span class="task-text"><strong>${title}</strong><small>${detail}</small></span>${icon('chevron')}</button>`).join(''))}
+      ${cardPanel('今日到貨',arrivals.map(r=>recordLink({label:r.lines.map(x=>x.sku+' ×'+x.qty).join('、'),detail:status[r.carrier]?.[0]??'待核對',kind:'receiving',id:r.id,sku:r.lines[0].sku})).join('')||empty('沒有今日到貨。'))}
+      ${cardPanel('低庫存',warnings.slice(0,2).map(p=>recordLink({label:p.sku,detail:`可用 ${p.available} · 在途 ${p.incoming}`,kind:'product',id:p.sku,sku:p.sku})).join('')||empty('沒有低庫存商品。'),button('查看全部',goAttrs('inventory','low'),'quiet'))}
     </div>
-    <details class="card dashboard-detail"><summary>各環節進度</summary><div class="stage-grid">
-      ${stageSets.map(([name,view,list,rows])=>`<section class="card stage"><h3>${name}</h3>${list.map(([key,label,value])=>`<button ${goAttrs(view,key)}>${label}<b>${value??rows.filter(r=>r.status===key).length}</b></button>`).join('')}</section>`).join('')}
-    </div></details>
-    <details class="card dashboard-detail"><summary>已完成的自動化</summary>${activityRows(demo)}</details>
-    <div class="today-footer">${button('資料來源',openAttrs('sources',''),'ghost','lock')} ${liveInventoryLink()}</div>
+    <details class="card task-more" data-disclosure="activity"><summary>近期作業紀錄</summary>${activityRows(demo)}</details>
+    <div class="today-footer">${button('資料來源',openAttrs('sources',''),'quiet','lock')} ${liveInventoryLink()}</div>
   </div>`;
 }
 
@@ -164,18 +146,21 @@ const stockMode = state => state.localPreview
   ? toggle([['demo','示例'],['snapshot','庫存快照']],state.inventoryMode,'inventory-mode')
   : liveInventoryLink();
 function inventoryTable(rows,state) {
-  const mobileFields=state.filter==='channels'?[0,1,11]:state.inventoryMode==='snapshot'?[0,1,4,10]:[0,1,6,7,9];
-  return table(['選取','商品 / SKU','品牌','分類','現有','已保留','可用','採購在途','近 60 天銷量','建議補貨量','供應商','上架平台'],rows.map(p=>[
+  const snapshot=state.inventoryMode==='snapshot';
+  const channels=state.filter==='channels';
+  return table(['','商品 / SKU',snapshot?'現有':'可用','在途',channels?'上架平台':'狀態'],rows.map(p=>[
     tick('inventory',p.sku,state,'選取 '+p.sku),
-    `<div class="product-cell">${photo(p)}<div class="cell-stack">${prodLink(p.sku,p.source==='snapshot'?'snapshot':'product')}<small>${escape(p.name)}</small></div></div>`,
-    fmt(p.brand),fmt(p.category),fmt(p.stock),fmt(p.reserved),fmt(p.available),fmt(p.incoming),fmt(p.sold),fmt(p.suggestion),
-    fmt(p.supplier??p.suppliers?.map(supplierName).join('、')),fmt(p.channels?.join(' · '))
-  ]),mobileFields);
+    `<div class="product-cell">${photo(p)}<div class="cell-stack">${prodLink(p.sku,snapshot?'snapshot':'product')}<small>${escape(p.brand??p.name)}</small></div></div>`,
+    `<span class="mobile-column">${snapshot?'現有':'可用'} </span>${fmt(snapshot?p.stock:p.available)}`,
+    `<span class="mobile-column">在途 </span>${fmt(p.incoming)}`,
+    channels?fmt(p.channels?.join(' · ')):productStatus(p)
+  ]),'inventory',['pick','identity','available','incoming','status']);
 }
 function productCard(p) {
   return `<button class="card product-card" ${openAttrs(p.source==='snapshot'?'snapshot':'product',p.sku)}>${photo(p,'photo')}<span class="card-body">
-    <span class="card-top"><small>${fmt(p.brand)}</small>${productStatus(p)}</span><h3>${escape(p.sku)}</h3><p>${escape(p.name)}</p>
-    <span class="stats-line"><span><b>${fmt(p.source==='snapshot'?p.stock:p.available)}</b>${p.source==='snapshot'?'現有庫存':'可用庫存'}</span><span><b>${fmt(p.incoming)}</b>採購在途</span></span></span></button>`;
+    <span class="product-brand">${fmt(p.brand)}</span><strong class="product-code">${escape(p.sku)}</strong>
+    <span class="stats-line"><span><b>${fmt(p.source==='snapshot'?p.stock:p.available)}</b>${p.source==='snapshot'?'現有':'可用'}</span><span><b>${fmt(p.incoming)}</b>在途</span></span>
+    ${p.available<=p.threshold||p.archived||p.service?productStatus(p):''}</span></button>`;
 }
 export function inventory(state,demo) {
   const pool=moduleInventory(state,demo);
@@ -205,77 +190,121 @@ export function inventory(state,demo) {
     ?empty(stock&&stockFilter?'保留量和補貨來源尚未核對。':'找不到符合的商品。')
     :view==='gallery'?`<div class="records">${chunk.map(productCard).join('')}</div>`:inventoryTable(chunk,state);
   const paginate=!['categories','movement'].includes(current)&&rows.length>0?`<div class="page-nav"><span class="muted">${rows.length} 項商品 · ${page} / ${pages}</span><div class="row-buttons">${button('上一頁',`data-page="${page-1}" ${page<=1?'disabled':''}`,'small','left')}${button('下一頁',`data-page="${page+1}" ${page>=pages?'disabled':''}`,'small','chevron')}</div></div>`:'';
-  return titleHeader('inventory',stockMode(state)+toggle([['gallery','圖庫','dashboard'],['table','表格','table']],state.gallery,'gallery'))+
+  const inventoryTools=toggle([['gallery','圖庫','dashboard'],['table','表格','table']],view,'gallery');
+  return titleHeader('inventory',stockMode(state))+
     (stock?banner(state.snapshot?'唯讀庫存快照 · 匯入 '+dateShort(state.snapshot.imported)+' · '+state.snapshot.items.length+' 筆原始 SKU。':state.snapshotError||'讀取庫存快照中…','info'):'')+
-    `<div class="module-tools">${tabs(inventoryTabs,stockFilter?'low':current)}${stockFilter?tabs(stockTabs,current,'庫存狀態'):''}<div class="filters">${field(query,'搜尋 SKU、品牌或品名')}<details class="extra-filters"><summary>篩選與排序</summary><div class="chips">${select('category','商品分類',[['','全部分類'],...categories.map(c=>[c,c])],state.category)}${select('sort','排序',[['sku','SKU 排序'],['stock','庫存由低到高']],state.sort)}</div></details></div></div>
-      ${selected.size&&view==='table'?`<div class="batchbar"><b>已選取 ${selected.size} 項</b>${button('匯出選取項目','data-action="export-inventory"','small','download')}</div>`:''}
-      ${current==='channels'?banner('通路顯示已提供的範例對應。平台同步狀態未接入。','info'):''}${list}${paginate}`;
+    toolbar(query,'搜尋品名或 SKU',select('category','商品分類',[['','全部分類'],...categories.map(c=>[c,c])],state.category)+inventoryTools,
+      filterSelect('商品檢視',[...inventoryViews,...stockTabs],current)+select('sort','排序',[['sku','SKU 排序'],['stock','庫存由低到高']],state.sort))+
+    (current!=='all'||state.category?`<div class="active-filter"><span>${escape([...inventoryViews,...stockTabs].find(x=>x[0]===current)?.[1]??'全部商品')}${state.category?' · '+escape(state.category):''}</span>${button('清除篩選','data-action="clear-inventory-filters"','quiet')}</div>`:'')+
+    (selected.size&&view==='table'?`<div class="batchbar"><b>已選取 ${selected.size} 項</b>${button('匯出選取項目','data-action="export-inventory"','small','download')}</div>`:'')+
+    (current==='channels'?banner('示例通路對應 · 平台庫存同步待連接','info'):'')+list+paginate;
 }
 
-export const shippingRows = (state,demo) => demo.shipping.filter(o=>(
-  state.filter==='all'||(state.filter==='history'?o.status==='shipped':state.filter==='process'?o.status!=='shipped':o.status===state.filter)
-)&&(!state.channel||o.source===state.channel)&&match([o.id,o.brand,o.source,o.customer,itemCodes(o)].join(' '),state.query))
+const shippingStages = [['process','待處理'],['review','待檢查'],['handoff','待交 3PL'],['shipped','已出貨'],['hold','異常']];
+const shippingViews = [['all','全部訂單'],['label','待下載標籤'],['history','歷史紀錄']];
+const shippingMatch = (order,filter) => ({
+  all:true, process:order.status!=='shipped', review:order.status==='process', history:order.status==='shipped',
+}[filter]??order.status===filter);
+export const shippingRows = (state,demo) => demo.shipping.filter(o=>shippingMatch(o,state.filter)
+  &&(!state.channel||o.source===state.channel)&&match([o.id,o.brand,o.source,o.customer,itemCodes(o)].join(' '),state.query))
   .sort((a,b)=>state.sort==='deadline'?(a.due??'99').localeCompare(b.due??'99'):a.id.localeCompare(b.id));
 
 export function shipping(state,demo) {
   const rows=shippingRows(state,demo);
   const selected=state.selected.shipping;
-  const actions=selected.size?`<div class="batchbar"><b>已選取 ${selected.size} 筆</b><div class="row-buttons">${button('出貨預檢',openAttrs('shipcheck',''),'small','check')}${button('匯出標籤清單','data-action="export-labels"','small','download')}</div></div>`:'';
-  return titleHeader('shipping',button('匯入示例訂單',openAttrs('import',''),'primary','upload'))+
-    `<div class="module-tools">${tabs(shippingTabs,state.filter)}<div class="filters">${field(state.query,'搜尋訂單、SKU 或店家')}<details class="extra-filters"><summary>篩選與排序</summary><div class="chips">${select('channel','通路',[['','全部通路'],...['Shopee','EasyStore','Ruten','Coupang'].map(x=>[x,x])],state.channel)}${select('sort','排序',[['deadline','期限優先'],['id','訂單編號']],state.sort)}</div></details></div></div>`+
+  const actions=selected.size?`<div class="batchbar"><b>已選取 ${selected.size} 筆</b><div class="row-buttons">${button('預檢訂單',openAttrs('shipcheck',''),'primary','check')}${button('匯出標籤清單','data-action="export-labels"','','download')}</div></div>`:'';
+  const statusLabel={process:['待檢查','gray'],label:['待下載標籤','amber'],handoff:['待交 3PL','gray'],shipped:['已出貨','green'],hold:['出貨異常','red']};
+  const next={process:'檢查訂單',label:'查看標籤',handoff:'查看交付',shipped:'查看訂單',hold:'核對異常'};
+  return titleHeader('shipping',button('匯入訂單',openAttrs('import',''),'','upload'))+
+    stages(shippingStages,state.filter,key=>demo.shipping.filter(o=>shippingMatch(o,key)).length)+
+    toolbar(state.query,'搜尋訂單或 SKU','',filterSelect('其他出貨檢視',[['process','待處理'],...shippingViews],state.filter)+
+      select('channel','通路',[['','全部通路'],...['Shopee','EasyStore','Ruten','Coupang'].map(x=>[x,x])],state.channel)+select('sort','排序',[['deadline','期限優先'],['id','訂單編號']],state.sort))+
     actions+(rows.length?table([
-      `<input type="checkbox" data-select-visible="shipping" aria-label="選取可見訂單" ${rows.every(r=>selected.has(r.id))?'checked':''}>`,'通路 / 店家','訂單 / 參考','商品 / SKU','數量','出貨期限','標籤','3PL 提交','異常'
-    ],rows.map(o=>[tick('shipping',o.id,state,'選取 '+o.id),`<div class="cell-stack"><b>${escape(o.source)}</b><small>${escape(o.brand)}</small></div>`,
-      `<div class="cell-stack">${rowLink(o.id,'shipping',o.id)}<small>${escape(o.customer)}</small><span class="mobile-column">${o.error?chip(o.error,'red'):stateChip(o.status)}</span></div>`,itemCell(o.lines),total(o.lines),fmt(o.due),
-      chip(o.label,o.label==='已備妥'?'green':'amber'),chip(o.handoff,o.handoff==='已提交'?'green':'gray'),o.error?chip(o.error,'red'):'—'
-    ]),[0,1,2,3,5]):empty('沒有符合的出貨訂單。'))+
-    `<p class="muted" style="margin-top:11px">示例預檢與匯出在本機執行。既有作業日 16:30 截止與獨立歸檔流程。</p>`;
+      `<input type="checkbox" data-select-visible="shipping" aria-label="選取可見訂單" ${rows.every(r=>selected.has(r.id))?'checked':''}>`,'訂單 / 平台','商品 / SKU','數量','出貨期限','狀態','操作'
+    ],rows.map(o=>[
+      tick('shipping',o.id,state,'選取 '+o.id),recordIdentity(o.id,'shipping',o.id,o.source+' · '+o.brand),itemCell(o.lines),
+      total(o.lines),`<span class="mobile-column">期限 </span>${fmt(o.due)}`,
+      o.error?chip(o.error,'red'):chip(...statusLabel[o.status]),actionLink(next[o.status],'shipping',o.id),
+    ]),'shipping',['pick','identity','items','quantity','deadline','status','action']):empty('這個狀態沒有符合的訂單。'));
 }
+const purchaseStages = [['all','全部'],['payment','待付款'],['seller','待出貨'],['sent','運輸中'],['partial','部分到貨'],['complete','已完成']];
+function purchaseProgress(order,demo) {
+  if(order.status!=='sent')return order.status;
+  const linked=demo.parcels.filter(p=>p.po===order.id);
+  const delivered=linked.filter(p=>p.status==='delivered');
+  const verified=delivered.filter(p=>demo.receiving.some(r=>r.status==='received'&&(p.id===r.ref||p.batch&&p.batch===r.ref)));
+  const covers=parcels=>order.lines.every(line=>parcels.flatMap(p=>p.lines).filter(x=>x.sku===line.sku).reduce((n,x)=>n+x.qty,0)>=line.qty);
+  if(verified.length&&covers(verified))return 'complete';
+  if(delivered.length)return covers(delivered)?'delivered':'partial';
+  return 'sent';
+}
+const purchaseMatch = (order,progress,filter) => ({
+  all:true,history:order.status==='sent',sent:progress==='sent',
+}[filter]??progress===filter);
 export function purchase(state,demo) {
   const isSuppliers=state.filter==='suppliers';
-  const rows=demo.purchase.filter(o=>(state.filter==='all'||(state.filter==='history'?o.status==='sent':o.status===state.filter))
-    &&match([o.id,supplierName(o.supplier),o.source,itemCodes(o),o.ref].join(' '),state.query));
+  const orders=demo.purchase.map(order=>({order,progress:purchaseProgress(order,demo)}));
+  const rows=orders.filter(({order:o,progress})=>purchaseMatch(o,progress,state.filter)
+    &&match([o.id,supplierName(o.supplier),o.source,itemCodes(o),o.ref].join(' '),state.query))
+    .sort((a,b)=>['payment','missing','seller','partial','sent','delivered','complete'].indexOf(a.progress)-['payment','missing','seller','partial','sent','delivered','complete'].indexOf(b.progress));
   const cards=suppliers.filter(s=>match([s.name,s.channels,s.skus.join(' ')].join(' '),state.query));
-  return titleHeader('purchase',button('供應商管理',goAttrs('purchase','suppliers'),'','inventory'))+
-    `<div class="module-tools">${tabs(purchaseTabs,state.filter)}${field(state.query,'搜尋供應商、採購單或 SKU')}</div>`+
-    (isSuppliers?(cards.length?`<div class="records">${cards.map(s=>`<button class="card category-card" ${openAttrs('supplier',s.id)}><span class="kpi-icon amber">${icon('purchase')}</span><h3>${escape(s.name)}</h3><p>${escape(s.channels)}</p><div class="stats-line"><span><b>${s.skus.length}</b>供應商品</span><span><b>${demo.purchase.filter(p=>p.supplier===s.id).length}</b>採購單</span></div></button>`).join('')}</div>`:empty('找不到符合的供應商。'))
-    :rows.length?table(['採購單','供應商 / 來源','商品 / SKU','數量','採購狀態','付款','運送路線','下單日期','金額'],
-      rows.map(o=>[rowLink(o.id,'purchase',o.id),`<div class="cell-stack">${rowLink(supplierName(o.supplier),'supplier',o.supplier)}<small>${o.source}</small></div>`,itemCell(o.lines),total(o.lines),
-      stateChip(o.status),chip(o.paid?'已付款':'本人付款',o.paid?'green':'amber'),fmt(routes[o.route]?.[1]),o.date,'CNY '+fmt(o.lines.reduce((s,l)=>s+l.cost*l.qty,0))]),[0,1,2,3,4]):empty('沒有符合的採購單。'));
+  const next={payment:'本人付款',seller:'等賣家交寄',missing:'核對運單',sent:'追蹤物流',partial:'追蹤其餘包裹',delivered:'待倉庫確認',complete:'查看紀錄'};
+  const shipment={payment:'尚未交寄',seller:'待賣家交寄',missing:'缺少物流單號',sent:'運輸中',partial:'部分到貨',delivered:'已送達',complete:'倉庫已點收'};
+  return titleHeader('purchase',button(isSuppliers?'回採購單':'供應商',goAttrs('purchase',isSuppliers?'all':'suppliers'))) +
+    (isSuppliers?'':stages(purchaseStages,state.filter,key=>orders.filter(({order,progress})=>purchaseMatch(order,progress,key)).length))+
+    toolbar(state.query,isSuppliers?'搜尋供應商或 SKU':'搜尋供應商、採購單或 SKU','',isSuppliers?'':filterSelect('其他採購檢視',[['all','全部採購單'],['delivered','已送達 · 待點收'],['missing','採購異常'],['history','採購歷史']],state.filter))+
+    (isSuppliers?(cards.length?`<div class="records">${cards.map(s=>`<button class="card category-card" ${openAttrs('supplier',s.id)}><span class="kpi-icon">${icon('purchase')}</span><h3>${escape(s.name)}</h3><p>${escape(s.channels)}</p><div class="stats-line"><span><b>${s.skus.length}</b>供應商品</span><span><b>${demo.purchase.filter(p=>p.supplier===s.id).length}</b>採購單</span></div></button>`).join('')}</div>`:empty('找不到符合的供應商。'))
+    :rows.length?table(['供應商 / 採購單','商品 / SKU','採購金額','付款','物流','下一步'],rows.map(({order:o,progress})=>[
+      recordIdentity(supplierName(o.supplier),'purchase',o.id,o.id+' · '+o.source),itemCell(o.lines),
+      'CNY '+fmt(o.lines.reduce((n,l)=>n+l.cost*l.qty,0)),
+      chip(o.paid?'已付款':'待付款',o.paid?'gray':'amber'),
+      chip(shipment[progress],progress==='missing'?'red':progress==='complete'?'green':'gray'),
+      actionLink(next[progress],'purchase',o.id),
+    ]),'purchase',['identity','items','cost','payment','status','action']):empty('這個狀態沒有符合的採購單。'));
 }
+const parcelStages = [['ready','待集運'],['waiting','待到漳州'],['storage','漳州已收'],['international','國際運輸中'],['delivery','台灣配送'],['delivered','已送達']];
+const parcelMatch = (parcel,filter) => filter==='all'||parcel.status===filter||(filter==='storage'&&parcel.status==='ready');
 export function parcels(state,demo) {
-  const list=demo.parcels.filter(p=>(state.filter==='all'||p.status===state.filter||(state.filter==='storage'&&p.status==='ready'))&&match([p.id,p.po,p.waybill,p.location,itemCodes(p)].join(' '),state.query));
+  const list=demo.parcels.filter(p=>parcelMatch(p,state.filter)&&match([p.id,p.po,p.waybill,p.location,itemCodes(p)].join(' '),state.query));
   const selected=state.selected.parcels;
   const batchRows=demo.batches.filter(b=>match([b.id,b.waybill,b.location].join(' '),state.query));
-  return titleHeader('parcels',button('三條採購路線',openAttrs('routes',''),'','link'))+
-    `<div class="module-tools">${tabs(parcelTabs,state.filter)}${field(state.query,'搜尋物流單號、包裹或 SKU')}</div>`+
-    (selected.size?`<div class="batchbar"><b>已選取 ${selected.size} 個待集運包裹</b>${button('模擬合箱','data-action="consolidate"','small primary','parcels')}</div>`:'')+
-    (list.length?`<div class="records parcel-list">${list.map(p=>`<article class="card record-card"><button class="card-button" ${openAttrs('parcel',p.id)}><div class="card-body parcel-body">
-      <span class="card-top"><strong class="record-id">${p.id}</strong>${stateChip(p.status)}</span>
-      <span class="parcel-pics">${p.lines.map(l=>shortProduct(l.sku)).join('')}</span><strong>${escape(p.lines.map(l=>l.sku+' ×'+l.qty).join(' / '))}</strong>
-      <span class="parcel-meta"><span>${escape(supplierName(demo.purchase.find(o=>o.id===p.po)?.supplier))} · ${p.po}</span><span>${p.carrier} · ${p.waybill}</span><span>${p.location} · ${dateShort(latest(p).at)}</span></span>
-      <span class="card-top"><small>${routes[p.route][1]} · ${p.weight} kg</small>${icon('chevron')}</span></div></button>
-      ${p.status==='ready'?`<label class="select-card">${tick('parcels',p.id,state,'選取包裹 '+p.id)} 加入合箱演練</label>`:''}</article>`).join('')}</div>`:empty('沒有符合的包裹。'))+
-    (batchRows.length?`<div class="section-head"><h2>集運批次</h2><span class="muted">${batchRows.length} 批</span></div>`+
-      cardPanel('合箱與台灣配送',batchRows.map(b=>recordLink({label:b.id,detail:b.parcels.length+' 個包裹 · '+b.location,kind:'batch',id:b.id,glyph:'parcels',mark:stateChip(b.status)})).join('')):'');
+  const parcelNext={waiting:'等漳州倉簽收',storage:'核對漳州倉收件',ready:'可選入合箱演練',grouped:'查看集運批次',international:'追蹤國際運輸',delivery:'查看台灣配送',delivered:'查看送達紀錄',exception:'核對物流'};
+  return titleHeader('parcels',button('採購路線',openAttrs('routes',''),'quiet','link'))+
+    stages(parcelStages,state.filter,key=>demo.parcels.filter(p=>parcelMatch(p,key)).length)+
+    toolbar(state.query,'搜尋包裹、運單或 SKU','',filterSelect('其他集運檢視',[['ready','待集運'],['all','全部包裹'],['grouped','已合箱'],['exception','物流異常']],state.filter))+
+    (selected.size?`<div class="batchbar"><b>已選取 ${selected.size} 個待集運包裹</b>${button('模擬合箱','data-action="consolidate"','primary','parcels')}</div>`:'')+
+    (list.length?`<div class="records parcel-list">${list.map(p=>{
+      const supplier=supplierName(demo.purchase.find(o=>o.id===p.po)?.supplier);
+      return `<article class="card record-card"><button class="card-button" ${openAttrs('parcel',p.id)}><div class="card-body parcel-body">
+        <span class="card-top"><span class="parcel-location">${escape(p.location)}</span>${stateChip(p.status)}</span>
+        <span class="parcel-products"><span class="parcel-pics">${p.lines.map(l=>shortProduct(l.sku)).join('')}</span><strong>${escape(p.lines.map(l=>l.sku+' ×'+l.qty).join(' / '))}</strong></span>
+        <span class="parcel-meta"><span>${escape(supplier)} · ${p.id}</span><span>${escape(p.carrier)} · ${escape(p.waybill)}</span></span>
+        <span class="parcel-next"><span>${escape(parcelNext[p.status])}</span>${icon('chevron')}</span></div></button>
+        ${p.status==='ready'&&p.route!=='B'?`<label class="select-card">${tick('parcels',p.id,state,'選取包裹 '+p.id)} 加入合箱演練</label>`:''}</article>`;
+    }).join('')}</div>`:empty('這個狀態沒有符合的包裹。'))+
+    (batchRows.length?`<details class="card task-more batch-list" data-disclosure="batches"><summary>集運批次 <span class="muted">${batchRows.length} 批</span></summary>${batchRows.map(b=>recordLink({label:b.id,detail:b.parcels.length+' 個包裹 · '+b.location,kind:'batch',id:b.id,glyph:'parcels',mark:stateChip(b.status)})).join('')}</details>`:'');
 }
+const receivingStages = [['all','到貨預告'],['today','今日到貨'],['announce','待填入庫'],['warehouse','待點收'],['received','已完成'],['mismatch','異常']];
+const receivingMatch = (record,filter) => filter==='all'||(filter==='today'?record.date===demoDay:
+  filter.startsWith('carrier-')?record.date===demoDay&&record.carrier===filter.slice(8):record.status===filter);
 export function receiving(state,demo) {
-  const todayFilter=state.filter==='today'||state.filter.startsWith('carrier-');
-  const rows=demo.receiving.filter(r=>(state.filter==='all'||(todayFilter?r.date===demoDay&&(state.filter==='today'||r.carrier===state.filter.slice(8)):r.status===state.filter))
-    &&match([r.ref,r.id,r.source,itemCodes(r)].join(' '),state.query));
-  const content=state.filter==='ledger'?ledgerView(state,demo):rows.length?table(['入庫參考','供應商 / 路線','商品 / SKU','預計','物流狀態','日期','Google Sheets','已點收','差異'],
+  const rows=demo.receiving.filter(r=>receivingMatch(r,state.filter)&&match([r.ref,r.id,r.source,itemCodes(r)].join(' '),state.query));
+  const content=state.filter==='ledger'?ledgerView(state,demo):rows.length?table(['入庫參考','商品 / SKU','預計','物流','入庫單','點收','差異','操作'],
     rows.map(r=>{
-      const parcel=sourceForReceiving(r,demo);
-      const ids=parcel?.parcels??(parcel?[parcel.id]:[]);
-      const purchaseIds=demo.parcels.filter(p=>ids.includes(p.id)).map(p=>p.po);
-      const names=[...new Set(demo.purchase.filter(p=>purchaseIds.includes(p.id)).map(p=>supplierName(p.supplier)))];
+      const draft=receiptDraft(r,sourceForReceiving(r,demo));
       const received=Object.keys(r.actual).length?Object.values(r.actual).reduce((sum,n)=>sum+n,0):null;
-      return [`<div class="cell-stack">${rowLink(r.id,'receiving',r.id)}<small>${r.ref}</small></div>`,`<div class="cell-stack">${fmt(names.length?names.join(' / '):null)}<small>${r.source}</small></div>`,
-        itemCell(r.lines),total(r.lines),stateChip(r.carrier),r.date,chip(r.written?'已記錄 · 示例':'待準備',r.written?'green':'amber'),fmt(received),received===null?'—':fmt(received-totalUnits(r.lines))];
-    }),[0,2,3,4,6,7]):empty('沒有符合的入庫紀錄。');
-  return titleHeader('receiving',button('提交紀錄',goAttrs('receiving','ledger'),'','table'))+
-    banner('物流送達、入庫單提交及倉庫點收分開記錄。預覽中的提交只寫入本機演練紀錄。','info')+
-    `<div class="module-tools">${tabs(receivingTabs,todayFilter?'today':state.filter)}${todayFilter?tabs([['today','全部今日到貨'],['carrier-delivery','配送中'],['carrier-delivered','已送達']],state.filter,'到貨狀態'):''}${field(state.query,'搜尋包裹、入庫單或 SKU')}</div>${content}`;
+      const difference=received===null?null:received-totalUnits(r.lines);
+      const sheetLabel=r.written?'已填入庫單':draft.allowed?'待填入庫':'待核對';
+      const next=draft.allowed?'準備入庫單':r.status==='warehouse'&&r.carrier==='delivered'?'確認點收':'查看入庫';
+      return [recordIdentity(r.id,'receiving',r.id,r.ref+' · '+r.source),itemCell(r.lines),total(r.lines),
+        `<div class="cell-stack">${stateChip(r.carrier)}<small>${escape(r.date)}</small></div>`,chip(sheetLabel,r.written?'gray':'amber'),
+        `<span class="mobile-column">${received===null?'待點收':'點收 '}</span><span class="${received===null?'desktop-only':''}">${fmt(received)}</span>`,
+        r.status==='mismatch'?chip(difference?'差 '+(difference>0?'+':'')+difference:'品項差異','red'):difference===null?'<span class="desktop-only">—</span>':fmt(difference),
+        actionLink(next,'receiving',r.id)];
+    }),'receiving',['identity','items','quantity','carrier','status','received','difference','action']):empty('這個狀態沒有符合的入庫紀錄。');
+  return titleHeader('receiving',button(state.filter==='ledger'?'回今日到貨':'提交紀錄',goAttrs('receiving',state.filter==='ledger'?'today':'ledger'),'','table'))+
+    (state.filter==='ledger'?'':stages(receivingStages,state.filter.startsWith('carrier-')?'today':state.filter,key=>demo.receiving.filter(r=>receivingMatch(r,key)).length)+
+      (state.filter==='ledger'?'':toolbar(state.query,'搜尋包裹、入庫單或 SKU','',filterSelect('今日配送狀態',[['today','今日全部'],['carrier-delivery','配送中'],['carrier-delivered','已送達']],state.filter))))+content;
 }
 function ledgerView(state,demo) {
   const baseline=demo.receiving.filter(r=>r.written&&!state.ledger.has(r.ref+'|'+r.date));

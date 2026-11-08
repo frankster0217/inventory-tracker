@@ -1,7 +1,7 @@
 import {createDemo,products,suppliers} from './data.mjs';
 import {demoConsolidate,readSnapshot,receiptDraft,runReceiptPreview,supplierName,totalUnits,validateImport} from './model.mjs';
-import {drawerModel} from './drawers.mjs?v=20261108-focus';
-import {button,chip,escape,icon,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs?v=20261108-focus';
+import {drawerModel} from './drawers.mjs?v=20261108-ux';
+import {button,escape,icon,initialFilter,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs?v=20261108-ux';
 
 const demo=createDemo();
 const $=id=>document.getElementById(id);
@@ -9,7 +9,7 @@ const main=$('main'),drawer=$('drawer'),search=$('search-dialog');
 const state={
   localPreview:['127.0.0.1','localhost'].includes(location.hostname),
   view:views[location.hash.slice(1)]?location.hash.slice(1):'dashboard',
-  filter:'all',query:'',sort:'sku',channel:'',category:'',page:1,gallery:'gallery',inventoryMode:'demo',
+  filter:initialFilter(location.hash.slice(1)),query:'',sort:'sku',channel:'',category:'',page:1,gallery:'gallery',inventoryMode:'demo',
   snapshot:null,snapshotItems:[],snapshotError:null,products,selected:{inventory:new Set(),shipping:new Set(),parcels:new Set()},
   ledger:new Map(),collapsed:false,
 };
@@ -20,28 +20,34 @@ const openButton=(label,glyph,kind)=>`<button class="icon-btn" aria-label="${lab
 function renderShell(){
   document.querySelector('.shell').classList.toggle('collapsed',state.collapsed);
   const active=key=>state.view===key?'aria-current="page"':'';
-  const previewLabel=state.localPreview?'本機預覽':'展示資料';
+  const previewLabel='示例資料';
   $('sidebar').innerHTML=`<a class="brand" href="#dashboard" data-go="dashboard" aria-label="Portolink Operations 首頁">${brandMark}<span class="brand-text"><span class="brand-name">Portolink</span><span class="brand-sub">Operations</span></span></a>
-    <p class="side-caption">營運工作區</p><nav class="side-links" aria-label="主導覽">
+    <nav class="side-links" aria-label="主導覽">
     ${modules.map(([key,label])=>`<button class="side-link" type="button" data-go="${key}" aria-label="${label}" title="${label}" ${active(key)}>${icon(key)}<span class="side-copy">${label}</span></button>`).join('')}</nav>
     <div class="side-end"><button class="side-link side-collapse" data-action="sidebar" aria-label="${state.collapsed?'展開側邊欄':'收合側邊欄'}" aria-expanded="${!state.collapsed}">${icon('collapse')}<span class="side-copy">收合側邊欄</span></button>
-    <div class="side-mode"><span class="indicator"></span><span><strong>${previewLabel}</strong><small>PORTO 3C / VOICity</small></span></div></div>`;
+    <span class="side-company">PORTO 3C / VOICity</span></div>`;
   $('topbar').innerHTML=`<a class="top-brand" href="#dashboard" data-go="dashboard" aria-label="Portolink 首頁">${brandMark}Portolink</a>
-    <button class="search-trigger" type="button" data-action="search" aria-label="全域搜尋">${icon('search')}<span>搜尋商品、訂單、包裹或供應商</span><kbd>⌘ K</kbd></button>
-    <div class="top-actions"><span class="top-mode">${chip(previewLabel,'amber')}</span>${openButton('通知','bell','notifications')}<span class="avatar" aria-label="Portolink 工作台">FW</span></div>`;
+    <button class="search-trigger" type="button" data-action="search" aria-label="全域搜尋">${icon('search')}<span>全域搜尋</span><kbd>⌘ K</kbd></button>
+    <div class="top-actions"><button class="source-label" ${openAttrs('sources','')} aria-label="示例資料 · 查看來源"><i></i>${previewLabel}</button>${openButton('通知','bell','notifications')}</div>`;
   const order=['dashboard','inventory','purchase','shipping'];
   $('mobile-nav').innerHTML=order.map(key=>{
     const [,label,,short]=modules.find(x=>x[0]===key);
     return `<button type="button" data-go="${key}" ${active(key)} aria-label="${label}">${icon(key)}${short}</button>`;
   }).join('')+`<button type="button" ${openAttrs('more','')} ${['parcels','receiving'].includes(state.view)?'aria-current="page"':''}>${icon('more')}更多</button>`;
 }
-function renderMain(){ main.innerHTML=views[state.view](state,demo); }
+function renderMain(){
+  const sameView=main.dataset.view===state.view;
+  const openDetails=new Set(sameView?[...main.querySelectorAll('details[open][data-disclosure]')].map(el=>el.dataset.disclosure):[]);
+  main.dataset.view=state.view;
+  main.innerHTML=views[state.view](state,demo);
+  for(const el of main.querySelectorAll('details[data-disclosure]'))el.open=openDetails.has(el.dataset.disclosure);
+}
 function render(){renderShell();renderMain();}
 function closePanels(){
   if(drawer.open)drawer.close();
   if(search.open)search.close();
 }
-function navigate(view,filter='all',options={}){
+function navigate(view,filter=initialFilter(view),options={}){
   if(!views[view])return;
   closePanels();
   state.view=view;
@@ -60,7 +66,7 @@ function renderDrawer(kind,id){
   if(!content)return;
   const alreadyOpen=drawer.open;
   if(search.open)search.close();
-  drawer.innerHTML=`<header class="drawer-head"><div><p class="overline">${escape(content.eyebrow)}</p><h2 id="drawer-title">${escape(content.title)}</h2></div><button class="icon-btn" type="button" data-action="close-drawer" aria-label="關閉明細">${icon('close')}</button></header><div class="drawer-content">${content.body}</div>`;
+  drawer.innerHTML=`<header class="drawer-head"><div><p class="overline">${escape(content.eyebrow)}</p><h2 id="drawer-title">${escape(content.title)}</h2></div><button class="icon-btn" type="button" data-action="close-drawer" aria-label="關閉明細">${icon('close')}</button></header><div class="drawer-content"><p class="drawer-feedback" role="status" hidden></p>${content.body}</div>`;
   if(!alreadyOpen)drawer.showModal();
   else drawer.scrollTo({top:0});
   drawer.querySelector('[data-action="close-drawer"]').focus({preventScroll:true});
@@ -100,11 +106,11 @@ function openSearch(){
 
 let toastTimer;
 function announce(message){
-  const toast=$('toast');
+  const toast=drawer.open?drawer.querySelector('.drawer-feedback'):$('toast');
   toast.textContent=message;
   toast.hidden=false;
   clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>{toast.hidden=true;},4000);
+  if(!drawer.open)toastTimer=setTimeout(()=>{toast.hidden=true;},4000);
 }
 const csvValue = value => {
   const text=String(value??'');
@@ -127,6 +133,7 @@ const actions={
   search:openSearch,
   'close-drawer':()=>drawer.close(),
   'close-search':()=>search.close(),
+  'clear-inventory-filters':()=>{Object.assign(state,{filter:'all',category:'',page:1});renderMain();$('view-query').focus({preventScroll:true});},
   consolidate:()=>{
     const batch=demoConsolidate(demo,state.selected.parcels);
     if(!batch){announce('請選取至少兩個已到漳州、尚未合箱的包裹。');return;}
@@ -167,7 +174,7 @@ document.addEventListener('click',event=>{
   const element=event.target.closest('button,a[data-go]');
   if(!element)return;
   const d=element.dataset;
-  if(d.go){event.preventDefault();navigate(d.go,d.jump||'all',{snapshot:d.snapshot==='true'});return;}
+  if(d.go){event.preventDefault();navigate(d.go,d.jump||initialFilter(d.go),{snapshot:d.snapshot==='true'});return;}
   if(d.open){renderDrawer(d.open,d.id);return;}
   if(d.action){actions[d.action]?.(element);return;}
   if(d.filter){state.filter=d.filter;state.page=1;renderMain();main.querySelector('[aria-pressed="true"].tab')?.focus({preventScroll:true});return;}
@@ -179,26 +186,29 @@ document.addEventListener('click',event=>{
 document.addEventListener('keydown',event=>{
   if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'){event.preventDefault();openSearch();}
 });
-document.addEventListener('input',event=>{
+function updateQuery(event){
   const input=event.target;
+  if(event.isComposing)return;
   if(input.id==='global-query'){showResults(input.value);return;}
-  if(input.id==='view-query'){
-    const position=input.selectionStart;
-    state.query=input.value;state.page=1;
-    renderMain();
-    const current=$('view-query');
-    current.focus({preventScroll:true});
-    current.setSelectionRange(position,position);
-  }
-});
+  if(input.id!=='view-query'||state.query===input.value)return;
+  const start=input.selectionStart,end=input.selectionEnd;
+  state.query=input.value;
+  state.page=1;
+  renderMain();
+  const current=$('view-query');
+  current.focus({preventScroll:true});
+  current.setSelectionRange(start,end);
+}
+document.addEventListener('input',updateQuery);
+document.addEventListener('compositionend',updateQuery);
 document.addEventListener('change',async event=>{
   const input=event.target;
   if(input.hasAttribute('data-filter-select')){
-    const label=input.closest('label').querySelector('span').textContent;
+    const label=input.getAttribute('aria-label');
     state.filter=input.value;
     state.page=1;
     renderMain();
-    [...main.querySelectorAll('.mobile-filter')].find(x=>x.querySelector('span').textContent===label)?.querySelector('select').focus({preventScroll:true});
+    [...main.querySelectorAll('[data-filter-select]')].find(x=>x.getAttribute('aria-label')===label)?.focus({preventScroll:true});
     return;
   }
   if(input.id==='import-file'&&input.files[0]){

@@ -1,6 +1,6 @@
 import {demoDay,knownProducts,routes,suppliers} from './data.mjs';
 import {combineLines,demoStock,receiptDraft,supplierName,totalUnits} from './model.mjs';
-import {activityRows,banner,button,chip,displayTime,empty,escape,fmt,liveInventoryLink,openAttrs,photo,recordLink,routeText,sourceForReceiving,stateChip,taskItems} from './views.mjs?v=20261108-focus';
+import {activityRows,banner,button,chip,displayTime,empty,escape,fmt,icon,liveInventoryLink,openAttrs,photo,recordLink,routeText,sourceForReceiving,stateChip,taskItems} from './views.mjs?v=20261108-ux';
 
 const fact = (label,value) => `<div class="fact"><dt>${escape(label)}</dt><dd>${value}</dd></div>`;
 const facts = pairs => `<dl class="facts">${pairs.map(([k,v])=>fact(k,v)).join('')}</dl>`;
@@ -73,7 +73,7 @@ function parcelDrawer(p,demo) {
     facts([['包裹狀態',stateChip(p.status)],['重量',p.weight+' kg'],['國內物流',escape(p.carrier)],['賣家運單',escape(p.waybill)],['所在位置',escape(p.location)],
       ['最近更新',displayTime(p.events.at(-1).at)]])+banner(routeText(p.route),'info')+
     group('包裹明細',itemRows(p.lines))+timeline(p.events)+
-    related('關聯採購單',po?[orderLink(po)]:[])+related('關聯合箱',batch?[batchLink(batch)]:[])+related('3PL 入庫',incoming.map(receivingLink)));
+    related('關聯採購單',po?[orderLink(po)]:[])+(p.route==='B'?'':related('關聯合箱',batch?[batchLink(batch)]:[]))+related('3PL 入庫',incoming.map(receivingLink)));
 }
 function batchDrawer(b,demo) {
   const parcels=demo.parcels.filter(p=>b.parcels.includes(p.id));
@@ -89,18 +89,19 @@ function receivingDrawer(r,state,demo) {
   const receiptState=Object.keys(r.actual).length>0;
   const units=receiptState?Object.values(r.actual).reduce((s,n)=>s+n,0):null;
   const rows=state.ledger.get(r.ref+'|'+r.date)?.rows??prepare.rows;
-  const checklist=[['預計入庫',true],['台灣末端配送',r.carrier==='delivery'||r.carrier==='delivered'],['承運商已送達',r.carrier==='delivered'],
-    ['入庫單已提交',r.written],['倉庫已點收',receiptState],['已核對可用',r.status==='received']];
-  const recording=`<div class="legend">${checklist.map(([label,done])=>chip(label,done?'green':'gray')).join('')}</div>`;
+  const milestones=[['物流',stateChip(r.carrier)],['入庫單',chip(r.written?'已填入庫單':prepare.allowed?'待填入庫':'待核對',r.written?'green':'amber')],
+    ['倉庫',r.status==='received'?chip('已點收，可用','green'):r.status==='mismatch'?chip('數量有差異','red'):chip('待倉庫點收')]];
   const preview=rows?.length?`<div class="table-shell card"><table class="table"><thead><tr>${['單號','商品編號','商品名稱','規格','位置','數量','明細備註'].map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(row=>`<tr>${row.map(cell=>`<td>${escape(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`:'';
   const submit=prepare.allowed?`<div class="row-buttons">${button('記錄入庫演練',`data-action="record-inbound" data-id="${r.id}"`,'primary','check')}${button('下載 A:G 草稿',`data-action="export-inbound" data-id="${r.id}"`,'','download')}</div>`:`<p>${escape(prepare.reason)}</p>`;
   const countForm=r.written&&r.carrier==='delivered'&&r.status!=='received'
     ?`<form data-receive="${r.id}"><div class="facts">${r.lines.map((line,i)=>`<label class="fact">${escape(line.sku)} · 預計 ${line.qty}<input name="qty-${i}" class="field count-input" type="number" step="1" min="0" max="100000" required value="${r.actual[line.sku]??''}" aria-label="${escape(line.sku+' 點收數量')}"></label>`).join('')}</div><button class="button" type="submit" style="margin-top:9px">確認點收演練</button></form>`:'';
   return record(r.id,'3PL 收貨 · '+sample,
-    facts([['入庫參考',escape(r.ref)],['承運來源',escape(r.source)],['有效日期',escape(r.date)],['物流狀態',stateChip(r.carrier)],
-      ['入庫狀態',stateChip(r.status)],['預計數量',totalUnits(r.lines)],['已點收',fmt(units)],['差異',fmt(units===null?null:units-totalUnits(r.lines))]])+
-    group('到貨與點收進度',recording)+group('本機入庫草稿 A:G',preview+submit)+
-    group('倉庫點收',countForm||'<p>點收狀態獨立於物流與入庫單。</p>')+
+    `<dl class="milestones">${milestones.map(([label,value])=>fact(label,value)).join('')}</dl>`+
+    (prepare.allowed?group('準備入庫單',submit):countForm?group('核對倉庫點收',countForm):'')+
+    facts([['入庫參考',escape(r.ref)],['承運來源',escape(r.source)],['有效日期',escape(r.date)],
+      ['預計數量',totalUnits(r.lines)],['已點收',fmt(units)],['差異',fmt(units===null?null:units-totalUnits(r.lines))]])+
+    (preview?`<details class="card task-more"><summary>查看入庫草稿 A:G</summary><div class="detail-inset">${preview}</div></details>`:'')+
+    group('到貨品項',itemRows(r.lines))+
     (source?timeline(source.events)+related('運送明細',r.kind==='batch'?[batchLink(source)]:[parcelLink(source)]):''));
 }
 function sourcesDrawer(state) {
@@ -146,7 +147,10 @@ export function drawerModel(kind,id,state,demo) {
   if(kind==='notifications')return record('通知與作業紀錄','NOTIFICATIONS · 示例',
     related('待辦事項',taskItems(demo).map(t=>({label:t.title,detail:t.subtitle,kind:t.ref[0],id:t.ref[1],sku:t.sku,mark:chip(t.mark,t.tone)})))+
     group('近期操作',`<div class="drawer-list">${activityRows(demo)}</div>`));
-  if(kind==='more')return record('更多工作區','PORTOLINK',`<div class="row-buttons">${button('集運','data-go="parcels"','','parcels')}${button('3PL 倉儲','data-go="receiving"','','receiving')}${button('資料來源',openAttrs('sources',''),'','lock')}</div>`);
+  if(kind==='more')return record('更多','Portolink',`<div class="drawer-list">
+    <button class="record-link" data-go="parcels">${icon('parcels')}<span class="task-text"><strong>集運</strong><small>包裹與集運批次</small></span>${icon('chevron')}</button>
+    <button class="record-link" data-go="receiving">${icon('receiving')}<span class="task-text"><strong>3PL 倉儲</strong><small>到貨、入庫單與點收</small></span>${icon('chevron')}</button>
+    ${recordLink({label:'資料來源',detail:'示例與正式資料的區別',kind:'sources',id:'',glyph:'lock'})}</div>`);
   const find=(rows,make)=>{const row=rows.find(x=>x.id===id);return row?make(row):null;};
   const factories={
     purchase:()=>find(demo.purchase,x=>purchaseDrawer(x,demo)),supplier:()=>find(suppliers,x=>supplierDrawer(x,demo)),
