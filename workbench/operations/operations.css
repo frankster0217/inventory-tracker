@@ -387,3 +387,7 @@ dialog::backdrop { background: #26282264; }
 .feed-tracking-history li::before { content: ''; position: absolute; inset-inline-start: -21px; top: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
 .feed-tracking-history time { color: var(--sub); font-size: 14px; font-variant-numeric: tabular-nums; }
 .feed-tracking-history strong { line-height: 1.45; overflow-wrap: anywhere; }
+
+.shipment-products { display: grid; gap: 3px; font-size: 16px; overflow-wrap: anywhere; }
+.shipment-event { display: block; margin-block-start: 6px; line-height: 1.4; overflow-wrap: anywhere; }
+.feed-tracking-actions { display: flex; flex-wrap: wrap; gap: 6px; }
