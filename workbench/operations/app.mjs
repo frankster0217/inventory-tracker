@@ -1,20 +1,21 @@
-import {createDemo,products,suppliers} from './data.mjs';
+import {createDemo,knownProducts,products,suppliers} from './data.mjs';
 import {demoConsolidate,readSnapshot,receiptDraft,runReceiptPreview,supplierName,totalUnits,validateImport} from './model.mjs';
-import {drawerModel} from './drawers.mjs?v=20261108-feeds';
-import {button,escape,icon,initialFilter,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs?v=20261108-feeds';
+import {drawerModel} from './drawers.mjs?v=20261109-inventory';
+import {button,escape,icon,initialFilter,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs?v=20261109-inventory';
 
-import {feedDrawer,feedSearch,feedView} from './feeds.mjs?v=20261108-shipment-contents';
-import {SUPABASE_URL,PUBLIC_KEY} from '../src/data.mjs';
+import {feedDrawer,feedSearch,feedView} from './feeds.mjs?v=20261109-inventory';
+import {SUPABASE_URL,PUBLIC_KEY,loadInventoryCatalog} from '../src/data.mjs?v=20261109-inventory';
+import {number} from '../src/core.mjs';
 
 const demo=createDemo();
 const $=id=>document.getElementById(id);
 const main=$('main'),drawer=$('drawer'),search=$('search-dialog');
 const liveMode=location.protocol==='https:'&&new URLSearchParams(location.search).get('demo')!=='1';
 const state={
-  liveMode,feed:{status:'loading',rows:[],error:null},
+  liveMode,feed:{status:'loading',rows:[],error:null},stock:{items:[],importedAt:null,error:null},
   localPreview:['127.0.0.1','localhost'].includes(location.hostname),
   view:views[location.hash.slice(1)]?location.hash.slice(1):'dashboard',
-  filter:liveMode?'all':initialFilter(location.hash.slice(1)),query:'',sort:'sku',channel:'',category:'',page:1,gallery:'gallery',inventoryMode:'demo',
+  filter:liveMode?'all':initialFilter(location.hash.slice(1)),query:'',sort:'sku',channel:'',category:'',page:1,gallery:liveMode?'table':'gallery',inventoryMode:'demo',
   snapshot:null,snapshotItems:[],snapshotError:null,products,selected:{inventory:new Set(),shipping:new Set(),parcels:new Set()},
   ledger:new Map(),collapsed:false,
 };
@@ -51,6 +52,8 @@ function render(){renderShell();renderMain();}
 function closePanels(){
   if(drawer.open)drawer.close();
   if(search.open)search.close();
+  drawer.replaceChildren();
+  search.replaceChildren();
 }
 function navigate(view,filter=liveMode?'all':initialFilter(view),options={}){
   if(!views[view])return;
@@ -82,7 +85,10 @@ for(const panel of [drawer,search]){
 }
 
 function searchIndex(){
-  if(liveMode)return feedSearch(state);
+  if(liveMode)return [
+    ...state.stock.items.map(p=>({label:p.sku,detail:p.name,glyph:'inventory',kind:'inventory-live',id:p.sku})),
+    ...feedSearch(state),
+  ];
   return [
     ...products.map(p=>({label:p.sku,detail:p.brand+' · '+p.name+' · 示例',sku:p.sku,kind:'product',id:p.sku})),
     ...demo.purchase.map(o=>({label:o.id,detail:o.source+' · '+supplierName(o.supplier)+' · '+o.lines.map(l=>l.sku).join(' '),glyph:'purchase',kind:'purchase',id:o.id})),
@@ -265,7 +271,43 @@ document.addEventListener('submit',event=>{
   announce(record.status==='received'?'點收演練完成。':'已記錄數量差異。');
 });
 
-let feedClient, feedRequest=0;
+let feedClient, feedRequest=0, sessionOwner;
+function clearStock(){
+  Object.assign(state.stock,{items:[],importedAt:null,error:null});
+}
+function renderRefreshedStock(){
+  if(state.view==='inventory'){
+    const field=$('view-query');
+    const selection=field&&document.activeElement===field?[field.selectionStart,field.selectionEnd]:null;
+    renderMain();
+    if(selection&&$('view-query')){
+      $('view-query').focus({preventScroll:true});
+      $('view-query').setSelectionRange(...selection);
+    }
+  }
+  if(search.open)showResults($('global-query').value);
+}
+async function refreshStock(request){
+  try{
+    const {rows,suppliers,archived,importedAt}=await loadInventoryCatalog(feedClient);
+    if(request!==feedRequest)return;
+    const supplierNames=new Map(suppliers.map(row=>[row.supplier_id,row.name]));
+    const archivedNames=new Set(archived.map(row=>row.product_name));
+    const items=rows.map(row=>{
+      const known=knownProducts.get(row.product_id);
+      return {
+        sku:row.product_id,name:row.product_name,stock:number(row.quantity),unit:row.unit,
+        location:row.location,supplier:supplierNames.get(row.supplier_id),photo:known?.photo,brand:known?.brand,
+        archived:row.is_archived??archivedNames.has(row.product_name)
+      };
+    });
+    Object.assign(state.stock,{items,importedAt,error:null});
+  }catch{
+    if(request!==feedRequest)return;
+    state.stock.error=state.stock.items.length?'更新失敗 · 顯示上次讀取的庫存':'庫存讀取失敗，請重新整理。';
+  }
+  renderRefreshedStock();
+}
 async function refreshFeed(){
   if(!liveMode)return;
   const request=++feedRequest;
@@ -273,31 +315,58 @@ async function refreshFeed(){
     if(!window.supabase)throw Error('登入元件載入失敗，請重新整理。');
     if(!feedClient){
       feedClient=window.supabase.createClient(SUPABASE_URL,PUBLIC_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
-      feedClient.auth.onAuthStateChange(event=>{
+      feedClient.auth.onAuthStateChange((event,session)=>{
         if(event==='SIGNED_OUT'){
           feedRequest++;
+          sessionOwner=null;
+          clearStock();
           Object.assign(state.feed,{status:'signed-out',rows:[],error:null});
           closePanels();
           renderMain();
+        }else if(event==='SIGNED_IN'&&sessionOwner&&session?.user?.id!==sessionOwner){
+          feedRequest++;
+          sessionOwner=null;
+          clearStock();
+          Object.assign(state.feed,{status:'loading',rows:[],error:null});
+          closePanels();
+          renderMain();
+          setTimeout(()=>void refreshFeed(),0);
         }
       });
     }
     const {data:{session},error:sessionError}=await feedClient.auth.getSession();
     if(request!==feedRequest)return;
     if(sessionError)throw Error('無法確認登入狀態，請重新整理。');
-    if(!session){
+    if(!session?.user?.id){
+      sessionOwner=null;
+      clearStock();
       Object.assign(state.feed,{status:'signed-out',rows:[],error:null});
       closePanels();
       renderMain();
       return;
     }
-    const {data,error}=await feedClient.from('portolink_source_feeds').select('source,observed_at,coverage,records');
+    if(sessionOwner&&sessionOwner!==session.user.id){
+      clearStock();
+      Object.assign(state.feed,{status:'loading',rows:[],error:null});
+      closePanels();
+      renderMain();
+    }
+    sessionOwner=session.user.id;
+    const {data,error}=await feedClient.from('portolink_source_feeds').select('source,observed_at,coverage,records').eq('owner_id',sessionOwner);
     if(request!==feedRequest)return;
     if(error||!Array.isArray(data))throw Error('私人作業資料讀取失敗，請重試。');
     Object.assign(state.feed,{status:'ready',rows:data,error:null});
-    renderMain();
+    if(!data.length){
+      clearStock();
+      state.stock.error='這個帳號無法讀取私人庫存。';
+      closePanels();
+    }
+    if(state.view==='inventory')renderRefreshedStock();
+    else renderMain();
+    if(data.length&&(state.view==='inventory'||!state.stock.items.length))await refreshStock(request);
   }catch(error){
     if(request!==feedRequest)return;
+    clearStock();
     Object.assign(state.feed,{status:'error',rows:[],error:error.message});
     closePanels();
     renderMain();

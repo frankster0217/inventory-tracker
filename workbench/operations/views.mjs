@@ -40,7 +40,7 @@ export const button = (label,attrs='',type='',glyph='') => `<button type="button
 export const empty = text => `<div class="empty">${escape(text)}</div>`;
 export const banner = (text,tone='') => `<div class="banner ${tone}">${icon(tone?'lock':'warning')}<span>${escape(text)}</span></div>`;
 export const routeText = route => routes[route]?.[0]??'路線待核對';
-export const liveInventoryLink = () => `<a class="button" href="https://frankster0217.github.io/inventory-tracker/workbench/#catalog">${icon('link')} 正式庫存</a>`;
+export const inventoryButton = () => button('查看庫存','data-go="inventory"','','inventory');
 export const photo = (item,cls='thumb') => `<span class="${cls}">${item?.photo?`<img src="./assets/${item.photo}.png" alt="${escape(item.brand+' '+item.sku)}" loading="lazy" decoding="async">`:icon('inventory')}</span>`;
 const shortProduct = sku => photo(knownProducts.get(sku));
 const prodLink = (sku,kind='product')=>`<button class="link" ${openAttrs(kind,sku)}>${escape(sku)}</button>`;
@@ -136,7 +136,7 @@ export function dashboard(state,demo) {
       ${cardPanel('低庫存',warnings.slice(0,2).map(p=>recordLink({label:p.sku,detail:`可用 ${p.available} · 在途 ${p.incoming}`,kind:'product',id:p.sku,sku:p.sku})).join('')||empty('沒有低庫存商品。'),button('查看全部',goAttrs('inventory','low'),'quiet'))}
     </div>
     <details class="card task-more" data-disclosure="activity"><summary>近期作業紀錄</summary>${activityRows(demo)}</details>
-    <div class="today-footer">${button('資料來源',openAttrs('sources',''),'quiet','lock')} ${liveInventoryLink()}</div>
+    <div class="today-footer">${button('資料來源',openAttrs('sources',''),'quiet','lock')} ${inventoryButton()}</div>
   </div>`;
 }
 
@@ -144,7 +144,7 @@ const productStatus = p => p.archived?chip('已封存'):p.service?chip('非庫�
   :p.available===0?chip('缺貨','red'):p.available<=p.threshold?chip('低庫存','amber'):chip('正常','green');
 const stockMode = state => state.localPreview
   ? toggle([['demo','示例'],['snapshot','庫存快照']],state.inventoryMode,'inventory-mode')
-  : liveInventoryLink();
+  : '';
 function inventoryTable(rows,state) {
   const snapshot=state.inventoryMode==='snapshot';
   const channels=state.filter==='channels';
@@ -161,6 +161,37 @@ function productCard(p) {
     <span class="product-brand">${fmt(p.brand)}</span><strong class="product-code">${escape(p.sku)}</strong>
     <span class="stats-line"><span><b>${fmt(p.source==='snapshot'?p.stock:p.available)}</b>${p.source==='snapshot'?'現有':'可用'}</span><span><b>${fmt(p.incoming)}</b>在途</span></span>
     ${p.available<=p.threshold||p.archived||p.service?productStatus(p):''}</span></button>`;
+}
+const pageNav = (count,page,pages) => `<div class="page-nav"><span class="muted">${count} 項商品 · ${page} / ${pages}</span><div class="row-buttons">${button('上一頁',`data-page="${page-1}" ${page<=1?'disabled':''}`,'small','left')}${button('下一頁',`data-page="${page+1}" ${page>=pages?'disabled':''}`,'small','chevron')}</div></div>`;
+const stockCount = p => p.stock===null?'待確認':`${fmt(p.stock)}${p.unit?' '+escape(p.unit):''}`;
+export function liveInventory(state) {
+  const {items,importedAt,error}=state.stock;
+  if(!items.length)return `<section class="card feed-panel" role="status">${escape(error??'正在讀取庫存…')}</section>`;
+  const rows=items.filter(p=>match([p.sku,p.name,p.supplier].join(' '),state.query))
+    .filter(p=>state.filter==='all'||(state.filter==='archived'?p.archived:!p.archived&&p.stock===0))
+    .sort((a,b)=>(state.sort==='stock'?(a.stock??Infinity)-(b.stock??Infinity):0)||a.sku.localeCompare(b.sku,'zh-TW'));
+  const pageSize=24;
+  const pages=Math.max(1,Math.ceil(rows.length/pageSize));
+  const page=Math.min(state.page,pages);
+  const chunk=rows.slice((page-1)*pageSize,page*pageSize);
+  const stamp=Date.parse(importedAt);
+  const imported=Number.isFinite(stamp)?'庫存匯入 '+dateShort(stamp):'庫存匯入時間未確認';
+  const outOfDate=Number.isFinite(stamp)&&Date.now()-stamp>24*60*60*1000;
+  const label=p=>p.archived?chip('已封存'):p.stock===0?chip('缺貨','amber'):'';
+  const list=state.gallery==='table'
+    ?table(['商品 / SKU','現有庫存','狀態'],chunk.map(p=>[
+      `<button type="button" class="product-cell stock-item" ${openAttrs('inventory-live',p.sku)} aria-label="${escape(p.sku)}">${photo(p)}<span class="cell-stack"><strong>${escape(p.sku)}</strong><small>${escape(p.name)}</small></span></button>`,
+      `<span class="mobile-column">現有 </span><strong>${stockCount(p)}</strong>`,label(p)
+    ]),'stock',['identity','available','status'])
+    :`<div class="records">${chunk.map(p=>`<button class="card product-card" ${openAttrs('inventory-live',p.sku)}>${photo(p,'photo')}<span class="card-body">
+      <strong class="product-code">${escape(p.sku)}</strong><span class="product-brand">${escape(p.name)}</span>
+      <span class="stats-line"><span>現有 <b>${stockCount(p)}</b></span>${label(p)}</span>
+    </span></button>`).join('')}</div>`;
+  return toolbar(state.query,'搜尋品名、SKU 或供應商',toggle([['table','表格','table'],['gallery','圖庫','dashboard']],state.gallery,'gallery')+
+    filterSelect('庫存狀態',[['all','全部商品'],['zero','缺貨'],['archived','已封存']],state.filter),
+    select('sort','排序',[['sku','SKU 排序'],['stock','庫存由低到高']],state.sort))+
+    `<div class="feed-metadata"><span>${imported}${outOfDate?' · 超過 24 小時':''}</span>${error?`<span role="status">${escape(error)}</span>`:''}</div>`+
+    (rows.length?list+(pages>1?pageNav(rows.length,page,pages):`<div class="page-nav muted">${rows.length} 項商品</div>`):empty('找不到符合的商品。'));
 }
 export function inventory(state,demo) {
   const pool=moduleInventory(state,demo);
@@ -189,7 +220,7 @@ export function inventory(state,demo) {
   const list=current==='categories'?group:current==='movement'?history:!rows.length
     ?empty(stock&&stockFilter?'保留量和補貨來源尚未核對。':'找不到符合的商品。')
     :view==='gallery'?`<div class="records">${chunk.map(productCard).join('')}</div>`:inventoryTable(chunk,state);
-  const paginate=!['categories','movement'].includes(current)&&rows.length>0?`<div class="page-nav"><span class="muted">${rows.length} 項商品 · ${page} / ${pages}</span><div class="row-buttons">${button('上一頁',`data-page="${page-1}" ${page<=1?'disabled':''}`,'small','left')}${button('下一頁',`data-page="${page+1}" ${page>=pages?'disabled':''}`,'small','chevron')}</div></div>`:'';
+  const paginate=!['categories','movement'].includes(current)&&rows.length>0?pageNav(rows.length,page,pages):'';
   const inventoryTools=toggle([['gallery','圖庫','dashboard'],['table','表格','table']],view,'gallery');
   return titleHeader('inventory',stockMode(state))+
     (stock?banner(state.snapshot?'唯讀庫存快照 · 匯入 '+dateShort(state.snapshot.imported)+' · '+state.snapshot.items.length+' 筆原始 SKU。':state.snapshotError||'讀取庫存快照中…','info'):'')+

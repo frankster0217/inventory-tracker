@@ -1,4 +1,4 @@
-import {button, chip, escape, icon, liveInventoryLink, openAttrs, recordLink} from './views.mjs?v=20261108-feeds';
+import {button, chip, escape, icon, liveInventory, openAttrs, recordLink} from './views.mjs?v=20261109-inventory';
 
 const sources={
   magicbuy:{label:'MagicBuy',url:'https://www.magicbuy.com.tw/app/#/dgorder/list',view:'purchase'},
@@ -12,7 +12,7 @@ const pages={
   purchase:['採購','MagicBuy 訂單與已核對的包裹。'],
   parcels:['集運','查看巧巧郎的包裹和順豐直寄進度。'],
   shipping:['出貨','Shopee 賣家中心的待出貨佇列。'],
-  inventory:['庫存','從既有庫存工作台查詢現有庫存。'],
+  inventory:['庫存',''],
   receiving:['3PL 倉儲','物流狀態與 3PL 點收分開追蹤。'],
 };
 const stageOptions={
@@ -221,12 +221,12 @@ function sourceSummary(feeds) {
 export function feedView(view,state) {
   const [title,purpose]=pages[view];
   const {rows:feeds,status:mode,error}=state.feed;
-  const heading=`<header class="page-head"><div><h1>${title}</h1><p>${purpose}</p></div><div class="head-tools">${mode==='ready'?button('讀取最新同步','data-action="refresh-feed"','','refresh'):''}</div></header>`;
-  if(view==='inventory')return heading+`<section class="card feed-panel">${liveInventoryLink()}</section>`;
-  if(mode==='signed-out')return heading+`<section class="card feed-panel"><h2>登入 Portolink</h2><p>使用原本的庫存工作台帳號，即可查看私人採購、物流和 Shopee 訂單。</p>
+  const heading=`<header class="page-head"><div><h1>${title}</h1>${purpose?`<p>${purpose}</p>`:''}</div><div class="head-tools">${mode==='ready'?button(view==='inventory'?'重新整理':'讀取最新同步','data-action="refresh-feed"','','refresh'):''}</div></header>`;
+  if(mode==='signed-out')return heading+`<section class="card feed-panel"><h2>登入 Portolink</h2><p>使用原本的庫存工作台帳號，即可查看庫存、採購、物流和 Shopee 訂單。</p>
     <form id="feed-login"><label>電子郵件<input class="field" name="email" type="email" autocomplete="username" required></label><label>密碼<input class="field" name="password" type="password" autocomplete="current-password" required></label>
     ${button('登入','','primary').replace('type="button"','type="submit"')}<p class="feed-message" role="status"></p></form></section>`;
   if(mode!=='ready')return heading+`<section class="card feed-panel" role="status"><p>${escape(error??'正在讀取私人作業資料…')}</p>${mode==='error'?button('重新讀取','data-action="refresh-feed"','','refresh'):''}</section>`;
+  if(view==='inventory')return heading+liveInventory(state);
   if(view==='dashboard')return heading+sourceSummary(feeds);
   if(view==='receiving')return heading+`<section class="card feed-panel"><h2>3PL 入庫單</h2><p>從集運查核配送狀態，入庫與點收請使用既有工作表。</p>
     ${button('查看物流','data-go="parcels"')} <a class="button" href="https://docs.google.com/spreadsheets/d/1Aoq9QANYCQfNqam4ldaoMv4q6TaqQQ-wfcadzaKdEiE/edit" target="_blank" rel="noopener noreferrer">開啟入庫單</a></section>`;

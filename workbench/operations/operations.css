@@ -315,6 +315,8 @@ dialog::backdrop { background: #26282264; }
   [data-layout=receiving] td[data-cell=carrier] .cell-stack { justify-items: end; }
   [data-layout=receiving] td[data-cell=difference] { justify-self: end; }
   [data-layout=inventory] tr { grid-template-columns: 36px minmax(0,1fr) auto; grid-template-areas: "pick identity status" ". available incoming"; }
+  [data-layout=stock] tr { grid-template-columns: minmax(0,1fr) auto; grid-template-areas: "identity available" "identity status"; }
+  [data-layout=stock] td[data-cell=available] { text-align: right; }
   td[data-cell=pick] { grid-area: pick; } td[data-cell=identity] { grid-area: identity; } td[data-cell=status] { grid-area: status; }
   td[data-cell=items] { grid-area: items; } td[data-cell=deadline] { grid-area: deadline; } td[data-cell=action] { grid-area: action; }
   td[data-cell=payment] { grid-area: payment; } td[data-cell=cost] { grid-area: cost; } td[data-cell=carrier] { grid-area: carrier; }
@@ -347,6 +349,8 @@ dialog::backdrop { background: #26282264; }
 #feed-login button { justify-self: start; }
 #feed-login .feed-message:empty { display: none; }
 .feed-metadata { display: flex; flex-wrap: wrap; gap: 5px 20px; font-size: 14px; color: var(--sub); margin-bottom: 10px; }
+.stock-item { width: 100%; min-height: 44px; padding: 0; border: 0; background: none; text-align: left; }
+.stock-item:hover strong { text-decoration: underline; }
 .feed-time { color: var(--sub); font-size: 14px; }
 .feed-row .status { max-width: 120px; text-align: left; }
 .purchase-order {

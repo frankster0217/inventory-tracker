@@ -1,6 +1,6 @@
 import {demoDay,knownProducts,routes,suppliers} from './data.mjs';
 import {combineLines,demoStock,receiptDraft,supplierName,totalUnits} from './model.mjs';
-import {activityRows,banner,button,chip,displayTime,empty,escape,fmt,icon,liveInventoryLink,openAttrs,photo,recordLink,routeText,sourceForReceiving,stateChip,taskItems} from './views.mjs?v=20261108-feeds';
+import {activityRows,banner,button,chip,displayTime,empty,escape,fmt,icon,inventoryButton,openAttrs,photo,recordLink,routeText,sourceForReceiving,stateChip,taskItems} from './views.mjs?v=20261109-inventory';
 
 const fact = (label,value) => `<div class="fact"><dt>${escape(label)}</dt><dd>${value}</dd></div>`;
 const facts = pairs => `<dl class="facts">${pairs.map(([k,v])=>fact(k,v)).join('')}</dl>`;
@@ -36,6 +36,15 @@ function productDrawer(kind,id,state,demo) {
       }))+related('採購歷史',orders.map(orderLink))+related('在途包裹',parcels.map(parcelLink))+
       related('3PL 點收與庫存異動',receipts.map(receivingLink))+
       group('上架通路',`<div class="legend">${p.channels.map(c=>chip(c,'blue')).join('')}</div><p>示例對應 · 平台庫存同步待連接</p>`)));
+}
+function liveInventoryDrawer(id,state) {
+  const p=state.stock.items.find(item=>item.sku===id);
+  if(!p)return null;
+  const stamp=Date.parse(state.stock.importedAt);
+  return record(p.sku,'庫存商品',photo(p,'photo')+`<p>${escape(p.name)}</p>`+
+    facts([['現有庫存',p.stock===null?'待確認':fmt(p.stock)+(p.unit?' '+escape(p.unit):'')],
+      ['供應商',escape(p.supplier||'未指派')],['倉位',fmt(p.location)],['庫存匯入',Number.isFinite(stamp)?displayTime(stamp):'時間未確認'],
+      ...(p.archived?[['狀態',chip('已封存')]]:[])]));
 }
 function purchaseDrawer(order,demo) {
   const children=demo.parcels.filter(p=>p.po===order.id);
@@ -116,7 +125,7 @@ function sourcesDrawer(state) {
     banner(state.localPreview?'示例資料與唯讀庫存快照分開顯示。':'展示商品及作業範例。正式資料在既有庫存工作台。','info')+
     facts(sources.map(([key,value,tone])=>[key,chip(tone==='blue'?'唯讀快照':'待連接',tone)+'<br>'+escape(value)]))+
     group('現有排程 · 台北工作日','<p>09:00 供應商採購檢查 · 11:00 3PL 到貨 · 16:30 出庫歸檔</p>')+
-    `<div class="row-buttons">${state.localPreview?button('查看庫存快照','data-go="inventory" data-snapshot="true"','primary','inventory'):''}${liveInventoryLink()}</div>`);
+    `<div class="row-buttons">${state.localPreview?button('查看庫存快照','data-go="inventory" data-snapshot="true"','primary','inventory'):inventoryButton()}</div>`);
 }
 function routeDrawer() {
   return record('採購與到貨路線','INBOUND ROUTES',Object.entries(routes).map(([id,[label,route]])=>group('路線 '+id,banner(label+' · '+route,'info'))).join('')+
@@ -140,6 +149,7 @@ function importDrawer() {
 }
 export function drawerModel(kind,id,state,demo) {
   if(kind==='product'||kind==='snapshot')return productDrawer(kind,id,state,demo);
+  if(kind==='inventory-live'&&state.liveMode)return liveInventoryDrawer(id,state);
   if(kind==='sources')return sourcesDrawer(state);
   if(kind==='routes')return routeDrawer();
   if(kind==='shipcheck')return checkDrawer(state,demo);

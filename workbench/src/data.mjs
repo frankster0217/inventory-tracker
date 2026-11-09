@@ -27,6 +27,25 @@ export function readVelocity(client,name='get_sales_velocity_by_code') {
 async function optionalTable(client,table,orderBy) {
   try{return await readAll(client,table,orderBy);}catch(error){if(['PGRST205','42P01'].includes(error.code))return null;throw error;}
 }
+export async function loadInventoryCatalog(client) {
+  const [legacy,meta,suppliers,archived,canonical,state]=await Promise.all([
+    readAll(client,'inventory','product_id'),readAll(client,'inventory_meta','id'),
+    readAll(client,'supplier_rules','supplier_id'),readAll(client,'archived_products','product_name'),
+    optionalTable(client,'inventory_skus','product_id'),optionalTable(client,'operations_state','id')
+  ]);
+  const current=canonical?.filter(row=>row.present_in_latest_import===true);
+  const sync=state?.find(row=>row.id==='stock_sync')?.payload;
+  const useCanonical=sync?.complete===true&&current?.length>0&&sync.row_count===current.length;
+  const legacyMeta=meta.find(row=>row.id===1);
+  const rows=useCanonical?current:legacy;
+  const expected=useCanonical?sync.row_count:legacyMeta?.row_count;
+  const importedAt=useCanonical?sync.checked_at:legacyMeta?.last_import;
+  const codes=rows.map(row=>row.product_id);
+  if(!rows.length||(Number.isInteger(expected)&&rows.length<expected)||codes.some(code=>typeof code!=='string'||!code.trim())||new Set(codes).size!==rows.length){
+    throw new Error('庫存清單不完整，請重試。');
+  }
+  return {rows,suppliers,archived,importedAt};
+}
 export async function loadSnapshot(client) {
   const tracker = Promise.all([
     readRpcRows(client,'get_sales_velocity_by_name','product_name'),
