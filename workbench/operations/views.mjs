@@ -1,4 +1,4 @@
-import {inventoryGroups,needsRestock} from './inventory.mjs?v=20261111-restock';
+import {inventoryGroups,needsRestock} from './inventory.mjs?v=20261111-restock-v2';
 import {categories, demoDay, knownProducts, routes, status, suppliers} from './data.mjs';
 import {demoStock, receiptDraft, supplierName, totalUnits} from './model.mjs';
 
@@ -206,7 +206,7 @@ export function liveInventory(state) {
   const tools=toolbar(state.query,'搜尋品名、SKU 或供應商',supplierSelect,
     toggle([['table','表格','table'],['gallery','圖庫','dashboard']],state.gallery,'gallery')+select('sort','排序',[['sku','SKU 排序'],['stock','庫存由低到高']],state.sort));
   const salesStamp=state.stock.model?.sources.sales.timestamp;
-  const meta=`<div class="feed-metadata"><span>${imported}</span><span>銷售同步 ${salesStamp?dateShort(Date.parse(salesStamp)):'時間未確認'}</span>${error?`<span role="status">${escape(error)}</span>`:''}</div>`;
+  const meta=`<div class="feed-metadata"><span>${imported}</span><span>讀取 ${dateShort(Date.now())}</span><span>銷售同步 ${salesStamp?dateShort(Date.parse(salesStamp)):'時間未確認'}</span>${error?`<span role="status">${escape(error)}</span>`:''}</div>`;
   const rules=restock?`<details class="restock-rules" data-disclosure="restock-rules"><summary>補貨依據 · 近 60 天銷量</summary><p>目標 ${fmt(cfg?.targetWeeks??4)} 週 + 交期 ${fmt(cfg?.leadTimeDays??4)} 天，預留 10%，扣除現有庫存及已核對在途。最低建議 ${fmt(cfg?.minOrderQty??5)} 件。</p></details>`:'';
   const cards=`<div class="supplier-grid" aria-label="依供應商分類">${matchingGroups.map(g=>`<button class="card supplier-card" data-supplier="${escape(g.id)}"><span class="supplier-card-label">${icon('purchase')}供應商</span><strong>${escape(g.name)}</strong><span class="supplier-card-foot"><span>${g.items.length} 項商品${restock?' · '+g.items.reduce((n,p)=>n+p.suggestion,0)+' 件建議補貨':''}</span>${icon('chevron')}</span></button>`).join('')}</div>`;
   const list=state.gallery==='table'

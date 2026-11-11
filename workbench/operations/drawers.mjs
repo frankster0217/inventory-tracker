@@ -1,6 +1,6 @@
 import {demoDay,knownProducts,routes,suppliers} from './data.mjs';
 import {combineLines,demoStock,receiptDraft,supplierName,totalUnits} from './model.mjs';
-import {activityRows,banner,button,chip,displayTime,empty,escape,fmt,icon,inventoryButton,incomingCount,suggestionCount,openAttrs,photo,recordLink,routeText,sourceForReceiving,stateChip,taskItems} from './views.mjs?v=20261111-restock';
+import {activityRows,banner,button,chip,displayTime,empty,escape,fmt,icon,inventoryButton,incomingCount,suggestionCount,openAttrs,photo,recordLink,routeText,sourceForReceiving,stateChip,taskItems} from './views.mjs?v=20261111-restock-v2';
 
 const fact = (label,value) => `<div class="fact"><dt>${escape(label)}</dt><dd>${value}</dd></div>`;
 const facts = pairs => `<dl class="facts">${pairs.map(([k,v])=>fact(k,v)).join('')}</dl>`;

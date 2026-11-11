@@ -1,11 +1,11 @@
 import {createDemo,knownProducts,products,suppliers} from './data.mjs';
 import {demoConsolidate,readSnapshot,receiptDraft,runReceiptPreview,supplierName,totalUnits,validateImport} from './model.mjs';
-import {drawerModel} from './drawers.mjs?v=20261111-restock';
-import {button,escape,icon,initialFilter,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs?v=20261111-restock';
+import {drawerModel} from './drawers.mjs?v=20261111-restock-v2';
+import {button,escape,icon,initialFilter,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs?v=20261111-restock-v2';
 
-import {feedDrawer,feedSearch,feedView} from './feeds.mjs?v=20261111-restock';
-import {SUPABASE_URL,PUBLIC_KEY,loadInventoryCatalog,loadSnapshot} from '../src/data.mjs?v=20261111-restock';
-import {buildInventoryRows} from './inventory.mjs?v=20261111-restock';
+import {feedDrawer,feedSearch,feedView} from './feeds.mjs?v=20261111-restock-v2';
+import {SUPABASE_URL,PUBLIC_KEY,loadInventoryCatalog,loadSnapshot} from '../src/data.mjs?v=20261111-restock-v2';
+import {buildInventoryRows} from './inventory.mjs?v=20261111-restock-v2';
 
 const demo=createDemo();
 const $=id=>document.getElementById(id);
