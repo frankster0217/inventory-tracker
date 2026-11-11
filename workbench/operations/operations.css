@@ -437,3 +437,10 @@ dialog::backdrop { background: #26282264; }
   .replenishment-action { font-size:14px; }
   .replenishment-overview .panel-head h2 { font-size:20px; }
 }
+
+@media(max-width:760px) {
+  .supplier-heading { margin:4px 0 10px; }
+  .supplier-heading h2 { display:none; }
+  [data-view=inventory] .feed-metadata span:nth-child(2),
+  [data-view=inventory] .feed-metadata span:nth-child(3) { display:none; }
+}

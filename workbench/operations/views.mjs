@@ -1,4 +1,4 @@
-import {inventoryGroups,needsRestock} from './inventory.mjs?v=20261111-restock-v3';
+import {inventoryGroups,needsRestock} from './inventory.mjs?v=20261111-restock-v4';
 import {categories, demoDay, knownProducts, routes, status, suppliers} from './data.mjs';
 import {demoStock, receiptDraft, supplierName, totalUnits} from './model.mjs';
 
@@ -171,10 +171,11 @@ const inventoryNotice=stock=>{
   if(stock.planError)return `<p class="inventory-notice" role="status">${escape(stock.planError)}</p>`;
   if(!stock.model)return '';
   const issues=[];
-  if(!stock.model.sources.purchasesComplete)issues.push('在途待對帳；建議量為估算，尚未扣除未核對採購。');
-  if(!stock.model.sources.stock.fresh)issues.push('庫存同步時間需核對，暫停計算建議量。');
-  if(!stock.model.sources.sales.timestamp)issues.push('銷售同步時間未確認，建議量僅供估算。');
-  else if(!stock.model.sources.sales.fresh)issues.push('銷售資料過期，暫停計算建議量。');
+  const pending=!stock.model.sources.purchasesComplete;
+  const missingSalesTime=!stock.model.sources.sales.timestamp;
+  if(pending||missingSalesTime)issues.push(`建議量為估算 · ${pending&&missingSalesTime?'在途及銷售同步時間':pending?'在途':'銷售同步時間'}待核對`);
+  if(!stock.model.sources.stock.fresh)issues.push('庫存時間需核對，暫停計算。');
+  if(!missingSalesTime&&!stock.model.sources.sales.fresh)issues.push('銷售資料過期，暫停計算。');
   return issues.length?`<p class="inventory-notice">${issues.join(' ')}</p>`:'';
 };
 export function restockOverview(state) {

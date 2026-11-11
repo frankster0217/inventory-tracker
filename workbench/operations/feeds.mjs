@@ -1,4 +1,4 @@
-import {button, chip, escape, icon, liveInventory, restockOverview, openAttrs, recordLink} from './views.mjs?v=20261111-restock-v3';
+import {button, chip, escape, icon, liveInventory, restockOverview, openAttrs, recordLink} from './views.mjs?v=20261111-restock-v4';
 
 const sources={
   magicbuy:{label:'MagicBuy',url:'https://www.magicbuy.com.tw/app/#/dgorder/list',view:'purchase'},
