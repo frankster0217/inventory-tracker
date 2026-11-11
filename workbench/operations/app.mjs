@@ -1,18 +1,18 @@
 import {createDemo,knownProducts,products,suppliers} from './data.mjs';
 import {demoConsolidate,readSnapshot,receiptDraft,runReceiptPreview,supplierName,totalUnits,validateImport} from './model.mjs';
-import {drawerModel} from './drawers.mjs?v=20261109-inventory';
-import {button,escape,icon,initialFilter,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs?v=20261109-inventory';
+import {drawerModel} from './drawers.mjs?v=20261111-restock';
+import {button,escape,icon,initialFilter,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs?v=20261111-restock';
 
-import {feedDrawer,feedSearch,feedView} from './feeds.mjs?v=20261109-inventory';
-import {SUPABASE_URL,PUBLIC_KEY,loadInventoryCatalog} from '../src/data.mjs?v=20261109-inventory';
-import {number} from '../src/core.mjs';
+import {feedDrawer,feedSearch,feedView} from './feeds.mjs?v=20261111-restock';
+import {SUPABASE_URL,PUBLIC_KEY,loadInventoryCatalog,loadSnapshot} from '../src/data.mjs?v=20261111-restock';
+import {buildInventoryRows} from './inventory.mjs?v=20261111-restock';
 
 const demo=createDemo();
 const $=id=>document.getElementById(id);
 const main=$('main'),drawer=$('drawer'),search=$('search-dialog');
 const liveMode=location.protocol==='https:'&&new URLSearchParams(location.search).get('demo')!=='1';
 const state={
-  liveMode,feed:{status:'loading',rows:[],error:null},stock:{items:[],importedAt:null,error:null},
+  liveMode,feed:{status:'loading',rows:[],error:null},stock:{items:[],importedAt:null,error:null,model:null,planError:null},supplier:'all',
   localPreview:['127.0.0.1','localhost'].includes(location.hostname),
   view:views[location.hash.slice(1)]?location.hash.slice(1):'dashboard',
   filter:liveMode?'all':initialFilter(location.hash.slice(1)),query:'',sort:'sku',channel:'',category:'',page:1,gallery:liveMode?'table':'gallery',inventoryMode:'demo',
@@ -59,7 +59,7 @@ function navigate(view,filter=liveMode?'all':initialFilter(view),options={}){
   if(!views[view])return;
   closePanels();
   state.view=view;
-  Object.assign(state,{filter,query:'',category:'',channel:'',page:1,sort:view==='shipping'?'deadline':'sku'});
+  Object.assign(state,{filter,query:'',category:'',channel:'',supplier:'all',page:1,sort:view==='shipping'?'deadline':'sku'});
   if(view==='inventory'&&options.snapshot)state.inventoryMode='snapshot';
   if(view==='inventory'&&['low','immediate','replenish','incoming','zero','sufficient'].includes(filter))state.inventoryMode='demo';
   if(location.hash!=='#'+view)history.pushState(null,'','#'+view);
@@ -192,6 +192,7 @@ document.addEventListener('click',event=>{
   if(d.open){renderDrawer(d.open,d.id);return;}
   if(d.action){actions[d.action]?.(element);return;}
   if(d.filter){state.filter=d.filter;state.page=1;renderMain();main.querySelector('[aria-pressed="true"].tab')?.focus({preventScroll:true});return;}
+  if(d.supplier!==undefined){state.supplier=d.supplier;state.page=1;renderMain();return;}
   if(d.gallery){state.gallery=d.gallery;if(['master','channels'].includes(state.filter))state.filter='all';renderMain();return;}
   if(d.inventoryMode){state.inventoryMode=d.inventoryMode;state.selected.inventory.clear();Object.assign(state,{filter:'all',page:1,query:'',category:''});renderMain();return;}
   if(d.categoryButton){state.filter='all';state.category=d.categoryButton;state.page=1;renderMain();return;}
@@ -239,6 +240,7 @@ document.addEventListener('change',async event=>{
     }catch(error){message.textContent=error.message;}
     return;
   }
+  if(input.id==='supplier-filter'){state.supplier=input.value;state.page=1;renderMain();return;}
   if(['channel','category','sort'].includes(input.id)){state[input.id]=input.value;state.page=1;renderMain();return;}
   if(input.dataset.selectVisible==='shipping'){
     for(const order of shippingRows(state,demo)){
@@ -273,10 +275,10 @@ document.addEventListener('submit',event=>{
 
 let feedClient, feedRequest=0, sessionOwner;
 function clearStock(){
-  Object.assign(state.stock,{items:[],importedAt:null,error:null});
+  Object.assign(state.stock,{items:[],importedAt:null,error:null,model:null,planError:null});
 }
 function renderRefreshedStock(){
-  if(state.view==='inventory'){
+  if(['inventory','dashboard'].includes(state.view)){
     const field=$('view-query');
     const selection=field&&document.activeElement===field?[field.selectionStart,field.selectionEnd]:null;
     renderMain();
@@ -289,19 +291,16 @@ function renderRefreshedStock(){
 }
 async function refreshStock(request){
   try{
-    const {rows,suppliers,archived,importedAt}=await loadInventoryCatalog(feedClient);
+    const [catalogResult,planResult]=await Promise.allSettled([loadInventoryCatalog(feedClient),loadSnapshot(feedClient)]);
     if(request!==feedRequest)return;
-    const supplierNames=new Map(suppliers.map(row=>[row.supplier_id,row.name]));
-    const archivedNames=new Set(archived.map(row=>row.product_name));
-    const items=rows.map(row=>{
-      const known=knownProducts.get(row.product_id);
-      return {
-        sku:row.product_id,name:row.product_name,stock:number(row.quantity),unit:row.unit,
-        location:row.location,supplier:supplierNames.get(row.supplier_id),photo:known?.photo,brand:known?.brand,
-        archived:row.is_archived??archivedNames.has(row.product_name)
-      };
-    });
-    Object.assign(state.stock,{items,importedAt,error:null});
+    if(catalogResult.status==='rejected')throw catalogResult.reason;
+    const catalog=catalogResult.value;
+    let settings={};
+    try{settings=JSON.parse(localStorage.getItem('workbench-settings')||'{}');}catch{}
+    const {items,model,cfg}=buildInventoryRows(catalog,planResult.status==='fulfilled'?planResult.value:null,settings);
+    for(const p of items){const known=knownProducts.get(p.sku);p.photo=known?.photo;p.brand=known?.brand;}
+    Object.assign(state.stock,{items,model,cfg,importedAt:catalog.importedAt,error:null,
+      planError:planResult.status==='rejected'?'補貨資料讀取失敗，庫存仍可查詢。':null});
   }catch{
     if(request!==feedRequest)return;
     state.stock.error=state.stock.items.length?'更新失敗 · 顯示上次讀取的庫存':'庫存讀取失敗，請重新整理。';
@@ -361,9 +360,9 @@ async function refreshFeed(){
       state.stock.error='這個帳號無法讀取私人庫存。';
       closePanels();
     }
-    if(state.view==='inventory')renderRefreshedStock();
+    if(['inventory','dashboard'].includes(state.view))renderRefreshedStock();
     else renderMain();
-    if(data.length&&(state.view==='inventory'||!state.stock.items.length))await refreshStock(request);
+    if(data.length)await refreshStock(request);
   }catch(error){
     if(request!==feedRequest)return;
     clearStock();

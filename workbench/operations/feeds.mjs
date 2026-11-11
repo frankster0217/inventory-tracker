@@ -1,4 +1,4 @@
-import {button, chip, escape, icon, liveInventory, openAttrs, recordLink} from './views.mjs?v=20261109-inventory';
+import {button, chip, escape, icon, liveInventory, restockOverview, openAttrs, recordLink} from './views.mjs?v=20261111-restock';
 
 const sources={
   magicbuy:{label:'MagicBuy',url:'https://www.magicbuy.com.tw/app/#/dgorder/list',view:'purchase'},
@@ -227,7 +227,7 @@ export function feedView(view,state) {
     ${button('登入','','primary').replace('type="button"','type="submit"')}<p class="feed-message" role="status"></p></form></section>`;
   if(mode!=='ready')return heading+`<section class="card feed-panel" role="status"><p>${escape(error??'正在讀取私人作業資料…')}</p>${mode==='error'?button('重新讀取','data-action="refresh-feed"','','refresh'):''}</section>`;
   if(view==='inventory')return heading+liveInventory(state);
-  if(view==='dashboard')return heading+sourceSummary(feeds);
+  if(view==='dashboard')return heading+restockOverview(state)+sourceSummary(feeds);
   if(view==='receiving')return heading+`<section class="card feed-panel"><h2>3PL 入庫單</h2><p>從集運查核配送狀態，入庫與點收請使用既有工作表。</p>
     ${button('查看物流','data-go="parcels"')} <a class="button" href="https://docs.google.com/spreadsheets/d/1Aoq9QANYCQfNqam4ldaoMv4q6TaqQQ-wfcadzaKdEiE/edit" target="_blank" rel="noopener noreferrer">開啟入庫單</a></section>`;
   const rows=recordsFor(feeds,view);
