@@ -49,3 +49,10 @@ test('inventory and dashboard link to one replenishment view with readable quant
  assert.doesNotMatch(detail,/aria-label="NR5103e"/);
  assert.match(restockOverview(state),/data-go="inventory" data-jump="restock"/);
 });
+
+test('readable sales RPC with unknown sync time gives estimates, never verified purchases',()=>{
+ const result=buildInventoryRows(catalog,{...base,sales_freshness:{latest_sync:undefined}},{},now);
+ assert.equal(item(result,'NR5103e').suggestion,9);
+ assert.equal(item(result,'NR5103e').verified,false);
+ assert.equal(result.model.sources.sales.fresh,false);
+});

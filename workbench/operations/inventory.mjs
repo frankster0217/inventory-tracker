@@ -9,7 +9,9 @@ export function buildInventoryRows(catalog, snapshot, settings={}, now=Date.now(
   const plans=new Map(model?.products.map(p=>[p.code,p])??[]);
   const names=new Map(catalog.suppliers.map(s=>[s.supplier_id,s]));
   const archived=new Set(catalog.archived.map(p=>p.product_name));
-  const fresh=model?.sources.stock.fresh&&model.sources.sales.fresh;
+  // The existing sales RPC is readable even when raw sales rows are not.
+  // An unknown sync time permits a labelled estimate, never a verified buy action.
+  const fresh=model?.sources.stock.fresh&&(model.sources.sales.fresh||!model.sources.sales.timestamp);
   const items=catalog.rows.map(row=>{
     const p=plans.get(row.product_id),supplier=names.get(row.supplier_id);
     const stock=number(row.quantity);
