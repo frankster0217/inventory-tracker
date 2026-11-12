@@ -413,11 +413,20 @@ dialog::backdrop { background: #26282264; }
 .replenishment-overview .inventory-notice { margin:0; border-left:0; border-top:1px solid var(--line); }
 .replenishment-summary { padding:12px 16px 3px; color:var(--sub); font-size:15px; }
 .replenishment-action { display:flex; align-items:baseline; gap:6px; white-space:nowrap; font-size:15px; }
+.replenishment-value { white-space:nowrap; }
 .replenish-number { color:#715812; font-size:23px; font-variant-numeric:tabular-nums; }
 .estimate-label { display:inline; font-size:13px; margin-left:5px; color:var(--sub); font-weight:500; }
 .restock-rules { margin:0 0 16px; color:var(--sub); font-size:15px; }
 .restock-rules summary { min-height:44px; padding-block:10px; }
 .restock-rules p { margin:4px 0 10px; }
+.restock-groups { display:grid; gap:24px; }
+.restock-supplier { min-width:0; }
+.restock-supplier-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:10px; }
+.restock-supplier-head h2, .restock-supplier-head h3 { margin:0; font-size:20px; line-height:1.45; overflow-wrap:anywhere; }
+.restock-supplier-head > span { flex-shrink:0; color:var(--sub); font-size:14px; }
+.replenishment-overview .restock-groups { gap:0; }
+.replenishment-overview .restock-supplier-head { margin:0; padding:12px 16px; background:#f8f7f2; border-block:1px solid var(--line); }
+.replenishment-overview .restock-supplier-head h3 { font-size:18px; }
 .stock-card-replenish { display:block; margin-top:8px; }
 [data-layout=stock] td[data-cell=replenish] { white-space:nowrap; }
 @media(max-width:1120px) { .supplier-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
@@ -428,13 +437,19 @@ dialog::backdrop { background: #26282264; }
   .supplier-card { min-height:128px; padding:15px; gap:9px; }
   .supplier-card strong { font-size:19px; }
   .supplier-heading { flex-wrap:wrap; }
+  .restock-groups { gap:20px; }
+  .restock-supplier-head { flex-wrap:wrap; gap:4px 12px; }
+  .restock-supplier-head h2, .restock-supplier-head h3 { font-size:19px; }
   [data-view=inventory] #supplier-filter { width:100%; grid-column:1 / -1; }
   [data-layout=stock] tr { grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"identity status" "available replenish" "incoming replenish"; gap:7px 10px; padding:14px 12px; }
   [data-layout=stock] td[data-cell=available] { text-align:left; }
   [data-layout=stock] td[data-cell=replenish] { grid-area:replenish; justify-self:end; text-align:right; }
-  .replenishment-overview .record-link { flex-wrap:wrap; }
-  .replenishment-overview .task-text { min-width:120px; }
-  .replenishment-action { font-size:14px; }
+  .replenishment-overview .record-link { display:grid; grid-template-columns:36px minmax(0,1fr) max-content; gap:8px; }
+  .replenishment-overview .record-link > .icon:last-child { display:none; }
+  .replenishment-overview .record-link .thumb { width:36px; height:36px; }
+  .replenishment-overview .task-text { min-width:0; }
+  .replenishment-action { display:grid; justify-items:end; gap:0; font-size:14px; }
+  .replenishment-action-label { font-size:13px; }
   .replenishment-overview .panel-head h2 { font-size:20px; }
 }
 

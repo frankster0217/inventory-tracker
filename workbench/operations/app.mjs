@@ -1,11 +1,11 @@
 import {createDemo,knownProducts,products,suppliers} from './data.mjs';
 import {demoConsolidate,readSnapshot,receiptDraft,runReceiptPreview,supplierName,totalUnits,validateImport} from './model.mjs';
-import {drawerModel} from './drawers.mjs?v=20261111-restock-v4';
-import {button,escape,icon,initialFilter,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs?v=20261111-restock-v4';
+import {drawerModel} from './drawers.mjs?v=20261112-restock-list';
+import {button,escape,icon,initialFilter,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs?v=20261112-restock-list';
 
-import {feedDrawer,feedSearch,feedView} from './feeds.mjs?v=20261111-restock-v4';
-import {SUPABASE_URL,PUBLIC_KEY,loadInventoryCatalog,loadSnapshot} from '../src/data.mjs?v=20261111-restock-v4';
-import {buildInventoryRows} from './inventory.mjs?v=20261111-restock-v4';
+import {feedDrawer,feedSearch,feedView} from './feeds.mjs?v=20261112-restock-list';
+import {SUPABASE_URL,PUBLIC_KEY,loadInventoryCatalog,loadSnapshot} from '../src/data.mjs?v=20261112-restock-list';
+import {buildInventoryRows} from './inventory.mjs?v=20261112-restock-list';
 
 const demo=createDemo();
 const $=id=>document.getElementById(id);
@@ -191,7 +191,7 @@ document.addEventListener('click',event=>{
   if(d.go){event.preventDefault();navigate(d.go,d.jump||(liveMode?'all':initialFilter(d.go)),{snapshot:d.snapshot==='true'});return;}
   if(d.open){renderDrawer(d.open,d.id);return;}
   if(d.action){actions[d.action]?.(element);return;}
-  if(d.filter){state.filter=d.filter;state.page=1;renderMain();main.querySelector('[aria-pressed="true"].tab')?.focus({preventScroll:true});return;}
+  if(d.filter){state.filter=d.filter;if(d.filter==='restock')state.supplier='all';state.page=1;renderMain();main.querySelector('[aria-pressed="true"].tab')?.focus({preventScroll:true});return;}
   if(d.supplier!==undefined){state.supplier=d.supplier;state.page=1;renderMain();return;}
   if(d.gallery){state.gallery=d.gallery;if(['master','channels'].includes(state.filter))state.filter='all';renderMain();return;}
   if(d.inventoryMode){state.inventoryMode=d.inventoryMode;state.selected.inventory.clear();Object.assign(state,{filter:'all',page:1,query:'',category:''});renderMain();return;}

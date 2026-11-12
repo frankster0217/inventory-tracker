@@ -56,3 +56,27 @@ test('readable sales RPC with unknown sync time gives estimates, never verified 
  assert.equal(item(result,'NR5103e').verified,false);
  assert.equal(result.model.sources.sales.fresh,false);
 });
+
+test('replenishment shows every product immediately under its supplier, including beyond the old page limit',()=>{
+ const result=buildInventoryRows(catalog,base,{},now);
+ const source=item(result,'MF296R');
+ const items=Array.from({length:28},(_,i)=>({...source,sku:`RESTOCK-${String(i+1).padStart(2,'0')}`}));
+ items.push(item(result,'NR5103e'),{...source,sku:'UNASSIGNED',supplierId:'',supplier:'供應商未指派',supplierOrder:999});
+ const state={stock:{...result,items,importedAt:stamp},supplier:'all',filter:'restock',query:'',gallery:'table',page:1,sort:'sku'};
+ for(const html of [liveInventory(state),liveInventory({...state,gallery:'gallery'}),restockOverview(state)]){
+  assert.equal((html.match(/data-open="inventory-live"/g)||[]).length,30);
+  assert.match(html,/RESTOCK-28/);
+  assert.match(html,/NR5103e/);
+  assert.match(html,/UNASSIGNED/);
+  assert.match(html,/Supplier &lt;ZTE&gt;/);
+  assert.match(html,/供應商未指派/);
+  assert.equal((html.match(/class="restock-supplier"/g)||[]).length,3);
+  assert.doesNotMatch(html,/class="card supplier-card"|data-page=/);
+ }
+ const filtered=liveInventory({...state,query:'RESTOCK-28'});
+ assert.equal((filtered.match(/data-open="inventory-live"/g)||[]).length,1);
+ assert.doesNotMatch(filtered,/aria-label="RESTOCK-27"/);
+ const oneSupplier=liveInventory({...state,supplier:'ahw'});
+ assert.match(oneSupplier,/aria-label="NR5103e"/);
+ assert.doesNotMatch(oneSupplier,/aria-label="RESTOCK-01"/);
+});
