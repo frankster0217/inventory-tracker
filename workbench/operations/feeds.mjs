@@ -1,4 +1,5 @@
-import {button, chip, escape, icon, liveInventory, restockOverview, openAttrs, recordLink} from './views.mjs?v=20261115-restock-reference';
+import {button, chip, escape, icon, liveInventory, restockOverview, openAttrs, recordLink} from './views.mjs?v=20261116-tracking';
+import {inboundSummary,receivingView,receivingDrawer} from './inbound.mjs?v=20261116-tracking';
 
 const sources={
   magicbuy:{label:'MagicBuy',url:'https://www.magicbuy.com.tw/app/#/dgorder/list',view:'purchase'},
@@ -6,6 +7,7 @@ const sources={
   sf:{label:'順豐速運',url:'https://htm.sf-express.com/tw/tc/dynamic_function/waybill/',view:'parcels'},
   shopee_porto:{label:'Shopee · PORTO 3C',url:'https://seller.shopee.tw/portal/sale/order?type=toship&source=all',view:'shipping'},
   shopee_voicity:{label:'Shopee · VOICity',url:'https://seller.shopee.tw/portal/sale/order?type=toship&source=all',view:'shipping'},
+  inbound:{label:'入庫追蹤',url:'https://docs.google.com/spreadsheets/d/1Aoq9QANYCQfNqam4ldaoMv4q6TaqQQ-wfcadzaKdEiE/edit',view:'receiving'},
 };
 const pages={
   dashboard:['營運總覽','查看最近一次查核的採購、物流和出貨。'],
@@ -27,14 +29,16 @@ const timestamp=value=>{
   const time=Date.parse(value);
   return Number.isFinite(time)?taipei.format(time):'時間未核對';
 };
-const stale=value=>Date.now()-Date.parse(value)>90*60*1000;
+const stale=value=>!value||!Number.isFinite(Date.parse(value))||Date.now()-Date.parse(value)>90*60*1000;
 const itemList=r=>Array.isArray(r.items)?r.items:[];
 const confirmedShipmentItems=r=>Array.isArray(r.confirmedShipmentItems)&&r.confirmedShipmentItems.every(item=>
   typeof item?.sku==='string'&&item.sku.trim()&&typeof item.name==='string'&&item.name.trim()&&
   Number.isSafeInteger(item.quantity)&&item.quantity>0)?r.confirmedShipmentItems:[];
 const itemLabel=item=>escape(item.variant||item.name)+' × '+escape(item.quantity);
+const variantLabel=item=>item.sku&&item.source_name&&item.mapping_status!=='needs_review'&&item.source_name.replace(/[\s_-]/g,'').toLowerCase()!==item.sku.replace(/[\s_-]/g,'').toLowerCase()
+  ?`<small class="purchase-variant">${escape(item.source_name)}</small>`:'';
 const purchaseItems=items=>items.length
-  ?`<ul class="purchase-items">${items.map(item=>`<li><span class="purchase-item"><strong>${escape(item.name)}</strong><span class="purchase-quantity">× ${escape(item.quantity)}</span></span></li>`).join('')}</ul>`
+  ?`<ul class="purchase-items">${items.map(item=>`<li><span class="purchase-item"><span><strong>${escape(item.name)}</strong>${variantLabel(item)}</span><span class="purchase-quantity">× ${escape(item.quantity)}</span></span></li>`).join('')}</ul>`
   :'<strong>商品明細待核對</strong>';
 function supplierLabel(record) {
   const name=escape(record.supplier||'供應商未核對');
@@ -57,7 +61,7 @@ const latestTracking=r=>trackingEvents(r)[0];
 const trackingRef=r=>[r.tracking?.carrier,r.tracking?.waybill].filter(Boolean).join(' ');
 const timeline=events=>`<ol class="feed-tracking-history">${events.map(event=>`<li><time>${escape(timestamp(event.at))}</time><strong>${escape(event.text)}</strong></li>`).join('')}</ol>`;
 const trackingHistory=r=>`<section><h3>物流進度</h3>
-  <p>${escape(trackingRef(r))} · 巧巧郎${r.tracking.checkedAt?' · 查核 '+escape(timestamp(r.tracking.checkedAt)):''}</p>
+  <p>${escape(trackingRef(r))}${r.tracking.checkedAt?' · 查核 '+escape(timestamp(r.tracking.checkedAt)):''}</p>
   ${timeline(trackingEvents(r))}</section>`;
 const waybills=r=>Array.isArray(r.waybills)?r.waybills:r.waybill?[r.waybill]:[];
 const parcelMembers=r=>Array.isArray(r.members)?r.members:[];
@@ -108,7 +112,9 @@ function shipmentContents(row,purchases) {
   const members=consolidated?parcelMembers(r):waybills(r).map(waybill=>({waybill}));
   const shipmentItems=confirmedShipmentItems(r);
   if(shipmentItems.length)return {parcels:members,items:shipmentItems,declared:[],pending:0,shipmentTotal:true};
+  if(Array.isArray(r.batchTotalItems)&&r.batchTotalItems.length)return {parcels:members,items:r.batchTotalItems,declared:[],pending:0,shipmentTotal:true,sharedBatch:true};
   const parcels=members.map(member=>{
+    if(Array.isArray(member.verifiedItems)&&member.verifiedItems.length)return {...member,items:member.verifiedItems};
     const candidates=purchases.filter(p=>matchesMember(member,p.record));
     const purchase=candidates.length===1?candidates[0].record:null;
     if(purchase&&Array.isArray(member.items)&&member.items.length){
@@ -118,17 +124,15 @@ function shipmentContents(row,purchases) {
       });
       return {...member,items};
     }
-    const items=purchase&&waybills(purchase).length===1&&waybills(purchase)[0]===member.waybill
-      ?itemList(purchase):[];
-    return {...member,items};
+    return {...member,items:[],expectedNames:purchase?itemList(purchase).map(item=>item.name):[]};
   });
   const unresolved=parcels.filter(parcel=>!parcel.items.length);
   return {parcels,items:parcels.flatMap(parcel=>parcel.items),
-    declared:[...new Set(unresolved.flatMap(declaredNames))],
+    declared:[...new Set(unresolved.flatMap(declaredNames))],expectedNames:[...new Set(unresolved.flatMap(parcel=>parcel.expectedNames??[]))],
     pending:unresolved.filter(parcel=>!declaredNames(parcel).length).length+Math.max(0,(Number(r.packageCount)||0)-members.length)};
 }
 function manifestContents(contents) {
-  if(contents.shipmentTotal)return `<section><h3>集運商品（本票合計）</h3>${purchaseItems(contents.items)}
+  if(contents.shipmentTotal)return `<section><h3>${contents.sharedBatch?'同批兩箱合計（不是本箱數量）':'集運商品（本票合計）'}</h3>${purchaseItems(contents.items)}
     <h4>境內包裹</h4><ul class="feed-items">${contents.parcels.map(parcel=>
       `<li>${escape([parcel.carrier,parcel.waybill].filter(Boolean).join(' '))}</li>`).join('')}</ul></section>`;
   return `<section><h3>集運商品</h3>${contents.parcels.map(parcel=>{
@@ -186,7 +190,7 @@ function feedRow(row,feeds,contents) {
   const linked=related.map(x=>x.record.status).filter(Boolean).join(' · ');
   const details=[r.supplier,r.date,r.route,r.deadline?'出貨期限 '+r.deadline:null,r.eventAt?timestamp(r.eventAt):null,linked].filter(Boolean).map(escape).join(' · ');
   const meta=`<small>${escape(r.id)}${details?' · '+details:''}</small>`;
-  const status=badge(r.status??'待核對');
+  const status=badge(r.carrierStatus??r.status??'待核對');
   const open=openAttrs('feed',recordKey(source,r.id));
   if(isUnidentified(row))return `<button class="record-link feed-row shipment-row" ${open}>
     <span class="task-text"><strong>${escape(r.carrier||'境內運單')} ${escape(r.waybill)}</strong>
@@ -203,8 +207,8 @@ function feedRow(row,feeds,contents) {
     const declared=contents.declared.length?`<span class="shipment-products"><b>${contents.declared.map(escape).join('、')}</b><small>巧巧郎申報品名 · 數量未核對</small></span>`:'';
     const details=[event.at?timestamp(event.at):null,shipmentLabel(source,r)].filter(Boolean).map(escape).join(' · ');
     return `<button class="record-link feed-row shipment-row" ${open}><span class="task-text">
-      ${contents.items.length?`<span class="shipment-products">${contents.items.map(item=>`<span><b>${escape(contents.shipmentTotal?item.name:item.sku||item.source_name||item.name)}</b> × ${escape(item.quantity)}</span>`).join('')}</span>`:declared?'':'<strong>商品與數量待核對</strong>'}
-      ${declared}${pending}<span class="shipment-event">${escape(event.text)}</span><small>${details}</small></span>
+      ${contents.items.length?`<span class="shipment-products">${contents.items.map(item=>`<span><b>${escape(contents.shipmentTotal?item.name:item.sku||item.source_name||item.name)}</b> × ${escape(item.quantity)}</span>`).join('')}</span>`:contents.expectedNames?.length?`<strong>${contents.expectedNames.map(escape).join('、')}</strong><small>對應訂單商品 · 本箱數量待核對</small>`:declared?'':'<strong>商品與數量待核對</strong>'}
+      ${contents.sharedBatch?'<small>同批兩箱合計，不代表本箱數量</small>':''}${declared}${pending}<span class="shipment-event">${escape(event.text)}</span><small>${details}</small><small>本票查核 ${escape(timestamp(r.tracking?.checkedAt??r.checkedAt))}${stale(r.tracking?.checkedAt??r.checkedAt)?' · 待更新':''}</small></span>
       ${status}${icon('chevron')}</button>`;
   }
   return `<button class="record-link feed-row" ${open}>
@@ -227,9 +231,8 @@ export function feedView(view,state) {
     ${button('登入','','primary').replace('type="button"','type="submit"')}<p class="feed-message" role="status"></p></form></section>`;
   if(mode!=='ready')return heading+`<section class="card feed-panel" role="status"><p>${escape(error??'正在讀取私人作業資料…')}</p>${mode==='error'?button('重新讀取','data-action="refresh-feed"','','refresh'):''}</section>`;
   if(view==='inventory')return heading+liveInventory(state);
-  if(view==='dashboard')return heading+restockOverview(state)+sourceSummary(feeds);
-  if(view==='receiving')return heading+`<section class="card feed-panel"><h2>3PL 入庫單</h2><p>從集運查核配送狀態，入庫與點收請使用既有工作表。</p>
-    ${button('查看物流','data-go="parcels"')} <a class="button" href="https://docs.google.com/spreadsheets/d/1Aoq9QANYCQfNqam4ldaoMv4q6TaqQQ-wfcadzaKdEiE/edit" target="_blank" rel="noopener noreferrer">開啟入庫單</a></section>`;
+  if(view==='dashboard')return heading+inboundSummary(feeds.find(f=>f.source==='inbound'))+restockOverview(state)+sourceSummary(feeds);
+  if(view==='receiving')return heading+receivingView(state,feeds.find(f=>f.source==='inbound'))+`<p class="feed-scope">${sourceLink('inbound')}</p>`;
   const rows=recordsFor(feeds,view);
   if(view==='shipping')rows.sort((a,b)=>(a.record.deadline??'9999').localeCompare(b.record.deadline??'9999'));
   if(view==='parcels')rows.sort((a,b)=>{
@@ -268,19 +271,20 @@ export function feedDrawer(id,state) {
   const row=sourceRows(state.feed.rows).find(x=>recordKey(x.source,x.record.id)===id);
   if(!row)return null;
   const {source,record:r,feed}=row;
+  if(source==='inbound')return r.kind==='shipment'?receivingDrawer(r,feed):null;
   const related=matchesFor(state.feed.rows,source,r);
   const isPurchase=source==='magicbuy';
   const isKkren=source==='kkren';
   const shipment=isShipment(source);
   const contents=shipment?shipmentContents(row,related):null;
   const products=isUnidentified(row)?'<section><h3>包裹待辨識</h3><p>巧巧郎尚未登記品名或數量；MagicBuy 未找到相同運單。需要供應商訂單或可辨識內容的照片。</p></section>':
-    shipment&&parcelMembers(r).length?manifestContents(contents):`<section><h3>商品</h3>${isPurchase||shipment?purchaseItems(contents?.items??itemList(r)):`<ul class="feed-items">${itemList(r).map(item=>`<li>${itemLabel(item)}${item.variant&&item.name!==item.variant?`<small>${escape(item.name)}</small>`:''}</li>`).join('')||'<li>商品明細待核對</li>'}</ul>`}</section>`;
+    shipment&&(parcelMembers(r).length||contents.sharedBatch)?manifestContents(contents):`<section><h3>商品</h3>${isPurchase||shipment?purchaseItems(contents?.items??itemList(r)):`<ul class="feed-items">${itemList(r).map(item=>`<li>${itemLabel(item)}${item.variant&&item.name!==item.variant?`<small>${escape(item.name)}</small>`:''}</li>`).join('')||'<li>商品明細待核對</li>'}</ul>`}</section>`;
   return {title:isPurchase?'採購明細':r.id,eyebrow:sources[source].label,body:`
-    <div class="legend">${badge(r.status??'待核對')} ${feedStatus(feed)}</div>
+    <div class="legend">${badge(r.carrierStatus??r.status??'待核對')} ${feedStatus(feed)}</div>
     ${isPurchase||shipment?products:''}
     ${isPurchase?orderTracking(r,related):''}
     ${shipment&&!isUnidentified(row)&&contents.pending?`<p>${contents.pending} 件包裹的商品待核對</p>`:''}
-    ${isKkren&&latestTracking(r)?trackingHistory(r):shipment?`<section><h3>物流進度</h3><p>${escape(shipmentEvent(source,r).text)}${r.eventAt?' · '+escape(timestamp(r.eventAt)):''}</p>${source==='sf'?waybills(r).map(sfWaybillLink).join(' '):''}</section>`:''}
+    ${shipment&&latestTracking(r)?trackingHistory(r):shipment?`<section><h3>物流進度</h3><p>${escape(shipmentEvent(source,r).text)}${r.eventAt?' · '+escape(timestamp(r.eventAt)):''}</p>${source==='sf'?waybills(r).map(sfWaybillLink).join(' '):''}</section>`:''}
     <section><h3>紀錄明細</h3>${isPurchase?purchaseMeta(r):`<p>${[r.supplier,r.date,r.route,r.deadline?'出貨期限 '+r.deadline:null,r.eventAt?timestamp(r.eventAt):null,r.eta?'預計送達 '+r.eta:null,r.weight].filter(Boolean).map(escape).join(' · ')}</p>`}
     <p>${waybills(r).length?'運單 '+waybills(r).map(escape).join('、'):''}</p></section>
     ${isPurchase||shipment?'':products}
@@ -289,7 +293,7 @@ export function feedDrawer(id,state) {
 }
 export function feedSearch(state) {
   if(state.feed.status!=='ready')return [];
-  return sourceRows(state.feed.rows).filter(row=>sources[row.source]).map(({source,record})=>({
-    label:record.id,detail:sources[source].label+' · '+searchText(record),kind:'feed',id:recordKey(source,record.id),
+  return sourceRows(state.feed.rows).filter(row=>sources[row.source]&&row.record.kind!=='run').map(({source,record})=>({
+    label:record.reference??record.id,detail:sources[source].label+' · '+searchText(record),kind:'feed',id:recordKey(source,record.id),
   }));
 }
