@@ -63,6 +63,8 @@ test('history read-back mismatches are not marked verified',()=>{
  const wrongLocation=structuredClone(sheets);wrongLocation.history[1][5]='Wrong warehouse location';
  const mismatch=buildTrackingFeeds({feeds,ledger,sheets:wrongLocation}).find(f=>f.source==='inbound');
  assert.equal(mismatch.records.find(r=>r.reference==='S-EXACT').historyVerified,false);
+ const serial=structuredClone(sheets);serial.history[1][0]=(Date.UTC(2026,10,13)-Date.UTC(1899,11,30))/86400000;
+ assert.equal(buildTrackingFeeds({feeds,ledger,sheets:serial}).find(f=>f.source==='inbound').records.find(r=>r.reference==='S-EXACT').historyVerified,true);
 });
 test('multiple owners are rejected and repeated projection preserves unique record IDs and item counts',()=>{
  assert.throws(()=>buildTrackingFeeds({feeds:[...feeds,{...feeds[0],owner_id:'other-owner'}],ledger,sheets}),/exactly one/);
@@ -82,4 +84,37 @@ test('publication changes only operational sources, guards previous hashes and s
  assert.match(publication.query,/Concurrent feed update/);
  const bad=structuredClone(owned);bad[3].records=[];
  assert.throws(()=>trackingPublication(before,bad),/Out-of-scope/);
+});
+
+test('new submitted purchases appear first, retain paid status and never restore the cancelled original',()=>{
+ const input=structuredClone(ledger);
+ input.submitted_purchases={latest:{specification:{source:'magicbuy',order_reference:'PO-NEW',supplier:'Verified supplier',route:'SF Express → Taiwan 3PL',submitted_at:'2026-11-14T18:00:00+08:00'},payment_status:'paid',payment_evidence:{verified_at:checked},parcels:{},items:[{model:'Battery makeup',sku:null,quantity:2}]}};
+ input.verified_pending_purchases={'PO-NEW':{source_status:'已採購 / 未發貨'}};
+ const result=buildTrackingFeeds({feeds,ledger:input,sheets});
+ const purchase=result.find(f=>f.source==='magicbuy').records.find(r=>r.id==='PO-NEW');
+ assert.equal(purchase.items[0].quantity,2);assert.equal(purchase.items[0].skuPending,true);
+ assert.equal(purchase.status,'已採購');
+ const html=feedView('purchase',state(result));
+ assert.ok(html.indexOf('Battery makeup')<html.indexOf('Order total is not a carton allocation'));
+ assert.doesNotMatch(html,/CANCELLED-ORIGINAL/);
+});
+
+test('explicit supplier carton splits and exact SF receiving allocations restore products without copying order totals',()=>{
+ const input=structuredClone(ledger);
+ input.purchase_candidates=[{items:[{model:'SKU-C',quantity:20}],carton_breakdown:[{seller_waybill:'SELLER-B',items:[{model:'SKU-C',quantity:10}]}]}];
+ input.allocations.push({event_key:'SF:SF-RECEIVED::SKU-D',waybill:'SF-RECEIVED',taiwan_waybill:'SF-RECEIVED',model:'SKU-D',quantity:3,delivered_at:'2026-11-12T10:00:00+08:00',verified_at:checked});
+ const result=buildTrackingFeeds({feeds,ledger:input,sheets});
+ const kk=result.find(f=>f.source==='kkren').records.find(r=>r.id==='S-CUSTOMS');
+ assert.equal(kk.confirmedShipmentItems[0].quantity,10);
+ const sf=result.find(f=>f.source==='sf').records.find(r=>r.id==='SF-RECEIVED');
+ assert.equal(sf.confirmedShipmentItems[0].quantity,3);assert.equal(sf.carrierStatus,'已送達');
+ assert.equal(result.find(f=>f.source==='sf').records.find(r=>r.id==='SF-CARTON1').confirmedShipmentItems,undefined);
+});
+
+test('known order products remain searchable and drawer quantities clearly refer to the order when carton allocation is unknown',()=>{
+ const s=state(build());s.query='Order total is not a carton allocation';
+ assert.match(feedView('parcels',s),/本箱數量待核對/);
+ const detail=feedDrawer('kkren|S-UNKNOWN',s).body;
+ assert.match(detail,/對應訂單合計（本箱分配待核對）/);
+ assert.match(detail,/× 100/);
 });

@@ -1,11 +1,11 @@
 import {createDemo,knownProducts,products,suppliers} from './data.mjs';
 import {demoConsolidate,readSnapshot,receiptDraft,runReceiptPreview,supplierName,totalUnits,validateImport} from './model.mjs';
-import {drawerModel} from './drawers.mjs?v=20261116-tracking';
-import {button,escape,icon,initialFilter,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs?v=20261116-tracking';
+import {drawerModel} from './drawers.mjs?v=20261116-purchases';
+import {button,escape,icon,initialFilter,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs?v=20261116-purchases';
 
-import {feedDrawer,feedSearch,feedView} from './feeds.mjs?v=20261116-tracking';
-import {SUPABASE_URL,PUBLIC_KEY,loadInventoryCatalog,loadSnapshot} from '../src/data.mjs?v=20261116-tracking';
-import {buildInventoryRows} from './inventory.mjs?v=20261116-tracking';
+import {feedDrawer,feedSearch,feedView} from './feeds.mjs?v=20261116-purchases';
+import {SUPABASE_URL,PUBLIC_KEY,loadInventoryCatalog,loadSnapshot} from '../src/data.mjs?v=20261116-purchases';
+import {buildInventoryRows} from './inventory.mjs?v=20261116-purchases';
 
 const demo=createDemo();
 const $=id=>document.getElementById(id);

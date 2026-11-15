@@ -9,9 +9,11 @@ const time=value=>{
 };
 const latest=(...values)=>values.filter(v=>time(v)>-Infinity).sort((a,b)=>time(b)-time(a))[0]??null;
 const unique=values=>[...new Set(values.filter(Boolean))];
+const sheetDate=value=>Number.isInteger(value)&&value>20000&&value<100000?new Date(Date.UTC(1899,11,30)+value*86400000).toISOString().slice(0,10):value;
 const sameInbound=(actual,expected)=>!Array.isArray(expected)||expected.length<6?true:expected.concat(Array(7).fill('')).slice(0,7).every((value,index)=>index===5?Number(actual?.[index])===Number(value):(actual?.[index]??'')===(value??''));
 const itemsFrom=(items,catalog)=>Object.entries(items??{}).map(([sku,quantity])=>({sku,name:catalog.get(sku)?.name??sku,quantity:Number(quantity)})).filter(i=>i.sku&&Number.isSafeInteger(i.quantity)&&i.quantity>0);
 const eventsOf=record=>list(record.tracking?.events);
+const waybillsOf=record=>record.waybills??(record.waybill?[record.waybill]:[]);
 function mergeTimeline(record,{carrier,waybill,checkedAt,eventAt,eventText}){
   if(!eventAt||!eventText||time(eventAt)===-Infinity)return;
   if(record.tracking?.waybill&&record.tracking.waybill!==waybill){record.trackingConflict=true;return;}
@@ -44,6 +46,21 @@ export function buildTrackingFeeds({feeds,ledger,returnsLedger={},sheets}){
   }
   const parcelItems=new Map();
   for(const [waybill,rows] of bySeller)parcelItems.set(waybill,sumItems(rows.map(a=>({sku:a.model,name:a.inbound_values?.[2]??catalog.get(a.model)?.name??a.model,quantity:a.quantity}))));
+  // These are explicit, recorded carton splits, not quantities inferred from a
+  // shared order, number prefix, or package weight.
+  for(const purchase of list(ledger.purchase_candidates))for(const carton of list(purchase.carton_breakdown)){
+    if(!carton.seller_waybill||!list(carton.items).length)continue;
+    const items=carton.items.map(item=>({sku:item.model,name:catalog.get(item.model)?.name??item.model,quantity:item.quantity}));
+    if(items.every(item=>item.sku&&Number.isSafeInteger(item.quantity)&&item.quantity>0)&&!parcelItems.has(carton.seller_waybill))parcelItems.set(carton.seller_waybill,items);
+  }
+  for(const order of Object.values(ledger.submitted_purchases??{}))for(const parcel of Object.values(order.parcels??{})){
+    if(!list(parcel.items).length)continue;
+    const items=parcel.items.map(part=>{
+      const line=order.items.find(item=>item.line_id===part.line_id);
+      return {sku:line?.sku,name:catalog.get(line?.sku)?.name??line?.model,quantity:part.catalog_quantity??part.quantity};
+    });
+    if(items.every(item=>item.sku&&Number.isSafeInteger(item.quantity)&&item.quantity>0)&&!parcelItems.has(parcel.waybill))parcelItems.set(parcel.waybill,items);
+  }
   for(const [waybill,confirmed] of Object.entries(ledger.confirmed_kkren_carton_contents??{}))parcelItems.set(waybill,itemsFrom(confirmed.items,catalog));
   const magicbuy=bySource.get('magicbuy'),orders=new Map(magicbuy.records.map(record=>[record.id,record]));
   for(const order of Object.values(ledger.submitted_purchases??{})){
@@ -53,8 +70,8 @@ export function buildTrackingFeeds({feeds,ledger,returnsLedger={},sheets}){
     const checkedAt=latest(order.payment_evidence?.verified_at,order.last_capture_evidence?.verified_at);
     if(time(record.checkedAt)>time(checkedAt))continue;
     const previousItems=list(record.items);
-    Object.assign(record,{date:spec.submitted_at.slice(0,10),supplier:spec.supplier,route:spec.route.includes('KKren')?'漳州倉集運':'順豐直寄台灣',
-      status:order.payment_status==='paid'?(legacy?.source_status??'已採購'):order.payment_status==='cancelled'?'已取消':order.payment_status==='refunded'?'已退款':'未付款',
+    Object.assign(record,{date:spec.submitted_at.slice(0,10),submittedAt:spec.submitted_at,supplier:spec.supplier,route:spec.route.includes('KKren')?'漳州倉集運':'順豐直寄台灣',
+      status:order.payment_status==='paid'?((legacy?.source_status??'已採購').split(' / ')[0]):order.payment_status==='cancelled'?'已取消':order.payment_status==='refunded'?'已退款':'未付款',
       waybills:unique([...list(record.waybills),...Object.keys(order.parcels)]),checkedAt,
       items:order.items.map(item=>{
         const previous=previousItems.find(i=>i.source_name===item.model&&i.quantity===(item.catalog_quantity??item.quantity)&&((item.sku&&i.sku===item.sku)||(!item.sku&&i.mapping_status==='needs_review')));
@@ -64,6 +81,18 @@ export function buildTrackingFeeds({feeds,ledger,returnsLedger={},sheets}){
       })});
     orders.set(record.id,record);
   }
+  for(const [id,purchase] of Object.entries(ledger.verified_pending_purchases??{})){
+    const record=orders.get(id);if(!record)continue;
+    // Exact child references recovered from the verified private manifest. This
+    // links an order for identification; it does not allocate the order total.
+    record.waybills=unique([...waybillsOf(record),purchase.seller_waybill,...list(purchase.seller_child_waybills)]);
+  }
+  const supplierUrls=new Map();
+  for(const record of orders.values())if(record.supplier_url){
+    if(!supplierUrls.has(record.supplier))supplierUrls.set(record.supplier,new Set());
+    supplierUrls.get(record.supplier).add(record.supplier_url);
+  }
+  for(const record of orders.values())if(!record.supplier_url&&supplierUrls.get(record.supplier)?.size===1)record.supplier_url=[...supplierUrls.get(record.supplier)][0];
   magicbuy.records=[...orders.values()];
   const kkren=bySource.get('kkren'),consolidations=new Map(kkren.records.map(record=>[record.id,record]));
   const open=list(ledger.open_kkren_tracking);
@@ -101,9 +130,21 @@ export function buildTrackingFeeds({feeds,ledger,returnsLedger={},sheets}){
       // manifest member has exact items. Partial manifests retain their holds.
       if(record.members.length&&record.members.every(m=>m.verifiedItems?.length))record.confirmedShipmentItems=sumItems(record.members.flatMap(m=>m.verifiedItems));
     }else if(parcelItems.has(record.waybill??record.id))record.confirmedShipmentItems=parcelItems.get(record.waybill??record.id);
+    const purchase=Object.values(ledger.verified_pending_purchases??{}).find(p=>p.seller_waybill===(record.waybill??record.id)&&p.warehouse_received_at);
+    if(purchase&&time(purchase.verified_at)>=time(record.checkedAt)&&['待入庫','已入庫'].includes(record.status)){
+      record.status='已入庫';record.eventAt=purchase.warehouse_received_at;record.checkedAt=purchase.verified_at;
+    }
   }
   kkren.records=[...consolidations.values()];
   const sf=bySource.get('sf'),sfRecords=new Map(sf.records.map(record=>[record.id,record]));
+  for(const [waybill,rows] of bySeller){
+    const direct=rows.filter(a=>!a.kkren_batch&&(sfRecords.has(waybill)||a.courier==='SF Express'||a.taiwan_waybill===waybill||a.event_key?.startsWith('SF:')));
+    if(!direct.length)continue;
+    const record=sfRecords.get(waybill)??{id:waybill,waybill};
+    record.confirmedShipmentItems=parcelItems.get(waybill);
+    for(const a of direct)mergeTimeline(record,{carrier:'順豐',waybill,checkedAt:latest(a.delivery_verified_at,a.last_verified_at,a.verified_at),eventAt:a.delivered_at??a.courier_event_at,eventText:a.delivered_at?'已簽收':a.courier_status??a.courier_event});
+    sfRecords.set(waybill,record);
+  }
   for(const entry of list(ledger.discovered_direct_sf)){
     const record=sfRecords.get(entry.waybill)??{id:entry.waybill,waybill:entry.waybill};
     const checkedAt=latest(entry.delivery_verified_at,entry.verified_at);
@@ -112,6 +153,7 @@ export function buildTrackingFeeds({feeds,ledger,returnsLedger={},sheets}){
     mergeTimeline(record,{carrier:'順豐',waybill:entry.waybill,checkedAt,eventAt:entry.latest_event_at??entry.delivered_at,eventText:entry.latest_event??entry.courier_status});
     sfRecords.set(record.id,record);
   }
+  for(const record of sfRecords.values())if(parcelItems.has(record.waybill??record.id))record.confirmedShipmentItems=parcelItems.get(record.waybill??record.id);
   for(const batch of list(ledger.verified_received_batches))for(const waybill of list(batch.taiwan_waybills)){
     const record=sfRecords.get(waybill)??{id:waybill,waybill};
     // Combined verified contents belong to the batch, never to either carton.
@@ -129,7 +171,7 @@ export function buildTrackingFeeds({feeds,ledger,returnsLedger={},sheets}){
   for(const [key,rows] of grouped){
     const first=rows[0],batch=list(ledger.verified_received_batches).find(b=>b.batch_key===key);
     const eventRows=rows.map(a=>({id:hash(a.event_key),sku:a.model,name:a.inbound_values?.[2]??catalog.get(a.model)?.name??a.model,quantity:a.quantity,
-      effectiveDate:a.entered_inbound_on,historyVerified:!!(a.history_verified&&sheets.history?.[a.history_row-1]?.[0]===a.entered_inbound_on&&sheets.history[a.history_row-1]?.[2]===a.model&&Number(sheets.history[a.history_row-1]?.[6])===a.quantity&&sameInbound(sheets.history[a.history_row-1]?.slice(1),a.inbound_values))}));
+      effectiveDate:a.entered_inbound_on,historyVerified:!!(a.history_verified&&sheetDate(sheets.history?.[a.history_row-1]?.[0])===a.entered_inbound_on&&sheets.history[a.history_row-1]?.[2]===a.model&&Number(sheets.history[a.history_row-1]?.[6])===a.quantity&&sameInbound(sheets.history[a.history_row-1]?.slice(1),a.inbound_values))}));
     const deliveredAt=latest(batch?.batch_complete_delivered_at,...rows.map(a=>a.parent_carrier_delivered_at??a.delivered_at));
     const tracking=consolidations.get(first.kkren_batch)?.tracking;
     const dates=unique(rows.map(a=>a.entered_inbound_on));
@@ -155,7 +197,7 @@ export function buildTrackingFeeds({feeds,ledger,returnsLedger={},sheets}){
       const row=item.destinations?.history_row??item.history_row;
       const hist=sheets.history?.[row-1];
       return {id:hash(item.event_key),sku:item.sku??'',name:item.name??item.visible_model??catalog.get(item.sku)?.name??item.sku??'商品待核對',quantity:item.quantity,
-        historyVerified:!!(entered&&hist?.[0]===effectiveDate&&hist?.[2]===item.sku&&Number(hist?.[6])===item.quantity&&sameInbound(hist?.slice(1),item.inbound_values))};
+        historyVerified:!!(entered&&sheetDate(hist?.[0])===effectiveDate&&hist?.[2]===item.sku&&Number(hist?.[6])===item.quantity&&sameInbound(hist?.slice(1),item.inbound_values))};
     });
     receiving.push({id:'return-'+hash(entry.parcel_key??entry.case_ref),kind:'shipment',reference:entry.case_ref,source:'return',items:events,events,
       waybills:[],sellerWaybills:[],entered,effectiveDate,historyVerified:entered&&events.every(item=>item.historyVerified),

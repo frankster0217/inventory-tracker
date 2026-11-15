@@ -1,4 +1,4 @@
-import {button,chip,escape,icon,openAttrs} from './views.mjs?v=20261116-tracking';
+import {button,chip,escape,icon,openAttrs} from './views.mjs?v=20261116-purchases';
 
 const when=value=>value?new Intl.DateTimeFormat('zh-TW',{timeZone:'Asia/Taipei',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(value)):'尚未核對';
 const expired=value=>!value||Date.now()-Date.parse(value)>24*3600000;

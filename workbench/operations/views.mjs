@@ -1,4 +1,4 @@
-import {displayedSuggestion,inventoryGroups,needsRestock} from './inventory.mjs?v=20261116-tracking';
+import {displayedSuggestion,inventoryGroups,needsRestock} from './inventory.mjs?v=20261116-purchases';
 import {categories, demoDay, knownProducts, routes, status, suppliers} from './data.mjs';
 import {demoStock, receiptDraft, supplierName, totalUnits} from './model.mjs';
 

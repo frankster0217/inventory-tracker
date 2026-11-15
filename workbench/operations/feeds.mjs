@@ -1,5 +1,5 @@
-import {button, chip, escape, icon, liveInventory, restockOverview, openAttrs, recordLink} from './views.mjs?v=20261116-tracking';
-import {inboundSummary,receivingView,receivingDrawer} from './inbound.mjs?v=20261116-tracking';
+import {button, chip, escape, icon, liveInventory, restockOverview, openAttrs, recordLink} from './views.mjs?v=20261116-purchases';
+import {inboundSummary,receivingView,receivingDrawer} from './inbound.mjs?v=20261116-purchases';
 
 const sources={
   magicbuy:{label:'MagicBuy',url:'https://www.magicbuy.com.tw/app/#/dgorder/list',view:'purchase'},
@@ -124,7 +124,7 @@ function shipmentContents(row,purchases) {
       });
       return {...member,items};
     }
-    return {...member,items:[],expectedNames:purchase?itemList(purchase).map(item=>item.name):[]};
+    return {...member,items:[],expectedItems:purchase?itemList(purchase):[],expectedNames:purchase?itemList(purchase).map(item=>item.name):[]};
   });
   const unresolved=parcels.filter(parcel=>!parcel.items.length);
   return {parcels,items:parcels.flatMap(parcel=>parcel.items),
@@ -138,7 +138,7 @@ function manifestContents(contents) {
   return `<section><h3>集運商品</h3>${contents.parcels.map(parcel=>{
     const declared=declaredNames(parcel);
     return `<div class="feed-parcel-group"><p><b>${escape([parcel.carrier,parcel.waybill].filter(Boolean).join(' '))}</b></p>
-      ${parcel.items.length?purchaseItems(parcel.items):declared.length?`<p>申報品名（數量未核對）</p><ul class="feed-items">${declared.map(name=>`<li>${escape(name)}</li>`).join('')}</ul>`:'<p>商品明細待核對</p>'}</div>`;
+      ${parcel.items.length?purchaseItems(parcel.items):parcel.expectedItems?.length?`<p>對應訂單合計（本箱分配待核對）</p>${purchaseItems(parcel.expectedItems)}`:declared.length?`<p>申報品名（數量未核對）</p><ul class="feed-items">${declared.map(name=>`<li>${escape(name)}</li>`).join('')}</ul>`:'<p>商品明細待核對</p>'}</div>`;
   }).join('')}</section>`;
 }
 function shipmentEvent(source,r) {
@@ -207,7 +207,8 @@ function feedRow(row,feeds,contents) {
     const declared=contents.declared.length?`<span class="shipment-products"><b>${contents.declared.map(escape).join('、')}</b><small>巧巧郎申報品名 · 數量未核對</small></span>`:'';
     const details=[event.at?timestamp(event.at):null,shipmentLabel(source,r)].filter(Boolean).map(escape).join(' · ');
     return `<button class="record-link feed-row shipment-row" ${open}><span class="task-text">
-      ${contents.items.length?`<span class="shipment-products">${contents.items.map(item=>`<span><b>${escape(contents.shipmentTotal?item.name:item.sku||item.source_name||item.name)}</b> × ${escape(item.quantity)}</span>`).join('')}</span>`:contents.expectedNames?.length?`<strong>${contents.expectedNames.map(escape).join('、')}</strong><small>對應訂單商品 · 本箱數量待核對</small>`:declared?'':'<strong>商品與數量待核對</strong>'}
+      ${contents.items.length?`<span class="shipment-products">${contents.items.map(item=>`<span><b>${escape(contents.shipmentTotal?item.name:item.sku||item.source_name||item.name)}</b> × ${escape(item.quantity)}</span>`).join('')}</span>`:''}
+      ${contents.expectedNames?.length?`<strong>${contents.expectedNames.map(escape).join('、')}</strong><small>對應訂單商品 · 本箱數量待核對</small>`:contents.items.length||declared?'':'<strong>商品與數量待核對</strong>'}
       ${contents.sharedBatch?'<small>同批兩箱合計，不代表本箱數量</small>':''}${declared}${pending}<span class="shipment-event">${escape(event.text)}</span><small>${details}</small><small>本票查核 ${escape(timestamp(r.tracking?.checkedAt??r.checkedAt))}${stale(r.tracking?.checkedAt??r.checkedAt)?' · 待更新':''}</small></span>
       ${status}${icon('chevron')}</button>`;
   }
@@ -234,6 +235,7 @@ export function feedView(view,state) {
   if(view==='dashboard')return heading+inboundSummary(feeds.find(f=>f.source==='inbound'))+restockOverview(state)+sourceSummary(feeds);
   if(view==='receiving')return heading+receivingView(state,feeds.find(f=>f.source==='inbound'))+`<p class="feed-scope">${sourceLink('inbound')}</p>`;
   const rows=recordsFor(feeds,view);
+  if(view==='purchase')rows.sort((a,b)=>(b.record.submittedAt??b.record.date??'').localeCompare(a.record.submittedAt??a.record.date??'')||b.record.id.localeCompare(a.record.id));
   if(view==='shipping')rows.sort((a,b)=>(a.record.deadline??'9999').localeCompare(b.record.deadline??'9999'));
   if(view==='parcels')rows.sort((a,b)=>{
     const aTime=latestTracking(a.record)?.at??'';
@@ -248,7 +250,7 @@ export function feedView(view,state) {
   const query=state.query.trim().toLocaleLowerCase();
   const filtered=rows.filter(row=>filter(row,state.filter)).map(row=>({
     row,contents:view==='parcels'?shipmentContents(row,matchesFor(feeds,row.source,row.record)):null,
-  })).filter(({row,contents})=>[searchText(row.record),...((contents?.items??[]).flatMap(item=>[item.sku,item.name]))].join(' ').toLocaleLowerCase().includes(query));
+  })).filter(({row,contents})=>[searchText(row.record),...(contents?.expectedNames??[]),...((contents?.items??[]).flatMap(item=>[item.sku,item.name]))].join(' ').toLocaleLowerCase().includes(query));
   const options=stageOptions[view];
   const feedKeys=Object.keys(sources).filter(key=>sources[key].view===view);
   const tools=`<div class="stages" role="group" aria-label="作業狀態">${options.map(([label,key])=>`<button class="tab" type="button" data-filter="${key}" aria-pressed="${state.filter===key}">${label}<span class="tab-count">${key.startsWith('shopee')&&!feeds.some(feed=>feed.source===key)?'—':rows.filter(row=>filter(row,key)).length}</span></button>`).join('')}</div>
