@@ -128,7 +128,7 @@ function shipmentContents(row,purchases) {
   });
   const unresolved=parcels.filter(parcel=>!parcel.items.length);
   return {parcels,items:parcels.flatMap(parcel=>parcel.items),
-    declared:[...new Set(unresolved.flatMap(declaredNames))],expectedNames:[...new Set(unresolved.flatMap(parcel=>parcel.expectedNames??[]))],
+    declared:[...new Set(unresolved.filter(parcel=>!parcel.expectedNames?.length).flatMap(declaredNames))],expectedNames:[...new Set(unresolved.flatMap(parcel=>parcel.expectedNames??[]))],
     pending:unresolved.filter(parcel=>!declaredNames(parcel).length).length+Math.max(0,(Number(r.packageCount)||0)-members.length)};
 }
 function manifestContents(contents) {
@@ -203,7 +203,7 @@ function feedRow(row,feeds,contents) {
     <button class="purchase-open" type="button" ${open} aria-label="查看訂單 ${escape(r.id)}，${escape(r.status??'待核對')}">${status}${icon('chevron')}</button></div>`;
   if(isShipment(source)){
     const event=shipmentEvent(source,r);
-    const pending=contents.pending?'<small>'+contents.pending+' 件包裹的商品待核對</small>':'';
+    const pending=contents.pending?'<small>'+contents.pending+' 件包裹的'+(contents.expectedNames?.length?'數量分配':'商品')+'待核對</small>':'';
     const declared=contents.declared.length?`<span class="shipment-products"><b>${contents.declared.map(escape).join('、')}</b><small>巧巧郎申報品名 · 數量未核對</small></span>`:'';
     const details=[event.at?timestamp(event.at):null,shipmentLabel(source,r)].filter(Boolean).map(escape).join(' · ');
     return `<button class="record-link feed-row shipment-row" ${open}><span class="task-text">
