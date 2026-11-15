@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {buildInventoryRows,inventoryGroups,needsRestock} from '../workbench/operations/inventory.mjs';
 import {liveInventory,restockOverview} from '../workbench/operations/views.mjs';
+import {drawerModel} from '../workbench/operations/drawers.mjs';
 const now=Date.parse('2026-11-11T11:00:00Z'),stamp=new Date(now).toISOString();
 const suppliers=[{supplier_id:'hcx',name:'Supplier <ZTE>',sort_order:2},{supplier_id:'ahw',name:'Huawei',sort_order:1}];
 const rows=[{product_id:'MF296R',product_name:'Router',quantity:2,supplier_id:'hcx'},{product_id:'NR5103e',product_name:'Router',quantity:4,supplier_id:'ahw'},{product_id:'Unknown',product_name:'Unknown',quantity:0,supplier_id:null}];
@@ -55,6 +56,48 @@ test('readable sales RPC with unknown sync time gives estimates, never verified 
  assert.equal(item(result,'NR5103e').suggestion,9);
  assert.equal(item(result,'NR5103e').verified,false);
  assert.equal(result.model.sources.sales.fresh,false);
+});
+
+test('expired sources keep the supplier review list and reference amounts without verifying a purchase',()=>{
+ const expiredNow=now+72*3600000;
+ const result=buildInventoryRows(catalog,{...base,purchase_sync:{complete:false}},{},expiredNow);
+ const p=item(result,'NR5103e');
+ assert.equal(p.suggestion,null);
+ assert.equal(p.referenceSuggestion,9);
+ assert.equal(p.verified,false);
+ assert.equal(p.incoming,null);
+ assert.equal(result.model.stats.ready,0);
+ assert.equal(result.items.filter(needsRestock).length,2);
+ const state={liveMode:true,stock:{...result,importedAt:stamp},supplier:'all',filter:'restock',query:'',gallery:'table',page:1,sort:'sku'};
+ for(const html of [liveInventory(state),liveInventory({...state,gallery:'gallery'}),restockOverview(state)]){
+  assert.match(html,/NR5103e/);
+  assert.match(html,/MF296R/);
+  assert.match(html,/舊資料參考/);
+  assert.match(html,/資料待更新/);
+  assert.match(html,/>9<\/strong>/);
+  assert.equal((html.match(/class="restock-supplier"/g)||[]).length,2);
+  assert.doesNotMatch(html,/找不到符合的商品|暫停計算|data-page=/);
+ }
+ const filtered=liveInventory({...state,query:'NR5103e'});
+ assert.match(filtered,/aria-label="NR5103e"/);
+ assert.doesNotMatch(filtered,/aria-label="MF296R"/);
+ const drawer=JSON.stringify(drawerModel('inventory-live','NR5103e',state,{}));
+ assert.match(drawer,/舊資料參考/);
+ assert.match(drawer,/資料待更新/);
+});
+
+test('missing, invalid or future stock provenance and failed reads cannot invent a reference list',()=>{
+ for(const timestamp of [null,'invalid','2027-01-01T00:00:00Z']){
+  const result=buildInventoryRows(catalog,{...base,inventory_meta:{last_import:timestamp}},{},now);
+  assert.equal(item(result,'NR5103e').referenceSuggestion,null);
+  assert.equal(item(result,'NR5103e').suggestion,null);
+  assert.equal(result.items.filter(needsRestock).length,0);
+ }
+ const result=buildInventoryRows(catalog,null,{},now);
+ const state={stock:{...result,importedAt:stamp},supplier:'all',filter:'restock',query:'',gallery:'table',page:1,sort:'sku'};
+ assert.equal(result.items.filter(needsRestock).length,0);
+ assert.match(liveInventory(state),/補貨資料尚未齊全/);
+ assert.doesNotMatch(liveInventory(state),/找不到符合的商品/);
 });
 
 test('replenishment shows every product immediately under its supplier, including beyond the old page limit',()=>{

@@ -1,11 +1,11 @@
 import {createDemo,knownProducts,products,suppliers} from './data.mjs';
 import {demoConsolidate,readSnapshot,receiptDraft,runReceiptPreview,supplierName,totalUnits,validateImport} from './model.mjs';
-import {drawerModel} from './drawers.mjs?v=20261112-restock-list';
-import {button,escape,icon,initialFilter,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs?v=20261112-restock-list';
+import {drawerModel} from './drawers.mjs?v=20261115-restock-reference';
+import {button,escape,icon,initialFilter,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs?v=20261115-restock-reference';
 
-import {feedDrawer,feedSearch,feedView} from './feeds.mjs?v=20261112-restock-list';
-import {SUPABASE_URL,PUBLIC_KEY,loadInventoryCatalog,loadSnapshot} from '../src/data.mjs?v=20261112-restock-list';
-import {buildInventoryRows} from './inventory.mjs?v=20261112-restock-list';
+import {feedDrawer,feedSearch,feedView} from './feeds.mjs?v=20261115-restock-reference';
+import {SUPABASE_URL,PUBLIC_KEY,loadInventoryCatalog,loadSnapshot} from '../src/data.mjs?v=20261115-restock-reference';
+import {buildInventoryRows} from './inventory.mjs?v=20261115-restock-reference';
 
 const demo=createDemo();
 const $=id=>document.getElementById(id);

@@ -1,6 +1,6 @@
 import {demoDay,knownProducts,routes,suppliers} from './data.mjs';
 import {combineLines,demoStock,receiptDraft,supplierName,totalUnits} from './model.mjs';
-import {activityRows,banner,button,chip,displayTime,empty,escape,fmt,icon,inventoryButton,incomingCount,suggestionCount,openAttrs,photo,recordLink,routeText,sourceForReceiving,stateChip,taskItems} from './views.mjs?v=20261112-restock-list';
+import {activityRows,banner,button,chip,displayTime,empty,escape,fmt,icon,inventoryButton,incomingCount,suggestionCount,openAttrs,photo,recordLink,routeText,sourceForReceiving,stateChip,taskItems} from './views.mjs?v=20261115-restock-reference';
 
 const fact = (label,value) => `<div class="fact"><dt>${escape(label)}</dt><dd>${value}</dd></div>`;
 const facts = pairs => `<dl class="facts">${pairs.map(([k,v])=>fact(k,v)).join('')}</dl>`;
@@ -42,8 +42,9 @@ function liveInventoryDrawer(id,state) {
   if(!p)return null;
   const stamp=Date.parse(state.stock.importedAt);
   return record(p.sku,'庫存商品',photo(p,'photo')+`<p>${escape(p.name)}</p>`+
-    facts([['現有庫存',p.stock===null?'待確認':fmt(p.stock)+(p.unit?' '+escape(p.unit):'')],
-      ['採購在途',incomingCount(p)],['近 60 天銷量',fmt(p.sold60)],['建議補貨',suggestionCount(p)],['供應商',escape(p.supplier||'未指派')],['倉位',fmt(p.location)],['庫存匯入',Number.isFinite(stamp)?displayTime(stamp):'時間未確認'],
+    (p.referenceSuggestion>0?banner('資料待更新 · 參考量須在庫存及在途核對後再採購。','info'):'')+
+    facts([[state.stock.model&&!state.stock.model.sources.stock.fresh?'上次庫存':'現有庫存',p.stock===null?'待確認':fmt(p.stock)+(p.unit?' '+escape(p.unit):'')],
+      ['採購在途',incomingCount(p)],['近 60 天銷量',fmt(p.sold60)],[p.referenceSuggestion>0?'參考補貨量':'建議補貨',suggestionCount(p)],['供應商',escape(p.supplier||'未指派')],['倉位',fmt(p.location)],['庫存匯入',Number.isFinite(stamp)?displayTime(stamp):'時間未確認'],
       ...(p.archived?[['狀態',chip('已封存')]]:[])]));
 }
 function purchaseDrawer(order,demo) {
