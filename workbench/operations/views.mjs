@@ -73,7 +73,7 @@ const inventoryViews = [['all','全部商品'],['categories','商品分類'],['m
 const stockTabs = [['low','低庫存'],['immediate','立即補貨'],['replenish','建議補貨'],['incoming','採購在途'],['zero','缺貨'],['sufficient','暫不需補貨']];
 const stages = (list,current,count) => `<div class="stages" role="group" aria-label="作業狀態">${list.map(([value,label])=>`<button class="tab" type="button" data-filter="${value}" aria-pressed="${current===value}">${label}<span class="tab-count">${count(value)}</span></button>`).join('')}</div>`;
 const toggle = (options,current,action) => `<div class="toggle" role="group" aria-label="顯示方式">${options.map(([value,label,glyph])=>`<button data-${action}="${value}" aria-pressed="${current===value}">${glyph?icon(glyph):''}${label}</button>`).join('')}</div>`;
-const field = (value,label='搜尋目前清單') => `<label class="search-field">${icon('search')}<input type="text" inputmode="search" class="field" aria-label="${label}" placeholder="${label}" id="view-query" value="${escape(value)}"></label>`;
+const field = (value,label='搜尋目前清單') => `<label class="search-field">${icon('search')}<input type="text" inputmode="text" enterkeyhint="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" class="field" aria-label="${label}" placeholder="${label}" id="view-query" value="${escape(value)}"></label>`;
 const select = (id,title,options,current) => `<select id="${id}" class="select" aria-label="${title}">${options.map(([value,label])=>`<option value="${escape(value)}" ${value===current?'selected':''}>${escape(label)}</option>`).join('')}</select>`;
 const filterSelect = (label,list,current) => `<select class="select" data-filter-select aria-label="${label}">${list.some(([key])=>key===current)?'':'<option value="" disabled selected>選擇檢視</option>'}${list.map(([value,text])=>`<option value="${value}" ${current===value?'selected':''}>${text}</option>`).join('')}</select>`;
 const toolbar = (query,label,controls='',advanced='') => `<div class="work-tools"><div class="filters">${field(query,label)}${controls}</div>${advanced?`<details class="extra-filters" data-disclosure="filters"><summary>篩選與排序</summary><div class="chips">${advanced}</div></details>`:''}</div>`;
@@ -126,7 +126,7 @@ export function dashboard(state,demo) {
   const taskRow=(task,index)=>`<button class="task-row ${index===0?'priority':''}" ${openAttrs(...task.ref)}>
     ${shortProduct(task.sku)}<span class="task-text">${index===0?'<span class="priority-label">優先處理</span>':''}<strong>${escape(task.title)}</strong><small>${escape(task.subtitle)}</small></span><span class="task-action">${task.action}</span>${icon('chevron')}</button>`;
   return `<div class="today-view">
-    <header class="page-head today-head"><div><h1>今日工作</h1><p>11 月 6 日 · 示例作業日</p></div></header>
+    <header class="page-head today-head"><div><h1>今日工作</h1><p>11 月 6 日 · 示例作業日</p></div><div class="head-tools">${button('庫存','data-go="inventory"','primary','inventory')}</div></header>
     <div class="day-summary card" aria-label="今日摘要">${summaries.map(([label,count,view,filter])=>`<button ${goAttrs(view,filter)}>${icon(view)}<span>${label}</span><b>${count}</b></button>`).join('')}</div>
     <section class="card task-list"><header class="panel-head"><h2>需要處理</h2><span class="muted">${tasks.length} 項</span></header>
       ${tasks.length?tasks.slice(0,3).map(taskRow).join(''):empty('目前沒有待辦事項。')}

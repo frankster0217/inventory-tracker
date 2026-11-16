@@ -1,9 +1,10 @@
 import {createDemo,knownProducts,products,suppliers} from './data.mjs';
 import {demoConsolidate,readSnapshot,receiptDraft,runReceiptPreview,supplierName,totalUnits,validateImport} from './model.mjs';
 import {drawerModel} from './drawers.mjs?v=20261116-purchases';
-import {button,escape,icon,initialFilter,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs?v=20261116-purchases';
+import {button,escape,icon,initialFilter,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs?v=20261116-search';
+import {renderSearchPage} from './search-render.mjs?v=20261116-search';
 
-import {feedDrawer,feedSearch,feedView} from './feeds.mjs?v=20261116-purchases';
+import {feedDrawer,feedSearch,feedView} from './feeds.mjs?v=20261116-search';
 import {SUPABASE_URL,PUBLIC_KEY,loadInventoryCatalog,loadSnapshot} from '../src/data.mjs?v=20261116-purchases';
 import {buildInventoryRows} from './inventory.mjs?v=20261116-purchases';
 
@@ -45,7 +46,7 @@ function renderMain(){
   const sameView=main.dataset.view===state.view;
   const openDetails=new Set(sameView?[...main.querySelectorAll('details[open][data-disclosure]')].map(el=>el.dataset.disclosure):[]);
   main.dataset.view=state.view;
-  main.innerHTML=liveMode?feedView(state.view,state):views[state.view](state,demo);
+  renderSearchPage(main,liveMode?feedView(state.view,state):views[state.view](state,demo),sameView);
   for(const el of main.querySelectorAll('details[data-disclosure]'))el.open=openDetails.has(el.dataset.disclosure);
 }
 function render(){renderShell();renderMain();}
@@ -111,7 +112,7 @@ function openSearch(){
   if(search.open){$('global-query').focus();return;}
   if(drawer.open)drawer.close();
   search.innerHTML=`<header class="drawer-head"><div><p class="overline">GLOBAL SEARCH</p><h2 id="search-title">全域搜尋</h2></div><button class="icon-btn" data-action="close-search" aria-label="關閉搜尋">${icon('close')}</button></header>
-    <div class="panel-pad"><input class="field" id="global-query" type="search" placeholder="例：MF296R 或 KK-DEMO-24" aria-label="搜尋全部工作區"></div><div id="search-results" class="search-results"></div>`;
+    <div class="panel-pad"><input class="field" id="global-query" type="search" inputmode="text" enterkeyhint="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="例：MF296R 或 KK-DEMO-24" aria-label="搜尋全部工作區"></div><div id="search-results" class="search-results"></div>`;
   showResults('');
   search.showModal();
   $('global-query').focus();
@@ -206,13 +207,9 @@ function updateQuery(event){
   if(event.isComposing)return;
   if(input.id==='global-query'){showResults(input.value);return;}
   if(input.id!=='view-query'||state.query===input.value)return;
-  const start=input.selectionStart,end=input.selectionEnd;
   state.query=input.value;
   state.page=1;
   renderMain();
-  const current=$('view-query');
-  current.focus({preventScroll:true});
-  current.setSelectionRange(start,end);
 }
 document.addEventListener('input',updateQuery);
 document.addEventListener('compositionend',updateQuery);
@@ -279,13 +276,7 @@ function clearStock(){
 }
 function renderRefreshedStock(){
   if(['inventory','dashboard'].includes(state.view)){
-    const field=$('view-query');
-    const selection=field&&document.activeElement===field?[field.selectionStart,field.selectionEnd]:null;
     renderMain();
-    if(selection&&$('view-query')){
-      $('view-query').focus({preventScroll:true});
-      $('view-query').setSelectionRange(...selection);
-    }
   }
   if(search.open)showResults($('global-query').value);
 }

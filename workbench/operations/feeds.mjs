@@ -1,5 +1,5 @@
-import {button, chip, escape, icon, liveInventory, restockOverview, openAttrs, recordLink} from './views.mjs?v=20261116-purchases';
-import {inboundSummary,receivingView,receivingDrawer} from './inbound.mjs?v=20261116-purchases';
+import {button, chip, escape, icon, liveInventory, restockOverview, openAttrs, recordLink} from './views.mjs?v=20261116-search';
+import {inboundSummary,receivingView,receivingDrawer} from './inbound.mjs?v=20261116-search';
 
 const sources={
   magicbuy:{label:'MagicBuy',url:'https://www.magicbuy.com.tw/app/#/dgorder/list',view:'purchase'},
@@ -226,7 +226,7 @@ function sourceSummary(feeds) {
 export function feedView(view,state) {
   const [title,purpose]=pages[view];
   const {rows:feeds,status:mode,error}=state.feed;
-  const heading=`<header class="page-head"><div><h1>${title}</h1>${purpose?`<p>${purpose}</p>`:''}</div><div class="head-tools">${mode==='ready'?button(view==='inventory'?'重新整理':'讀取最新同步','data-action="refresh-feed"','','refresh'):''}</div></header>`;
+  const heading=`<header class="page-head"><div><h1>${title}</h1>${purpose?`<p>${purpose}</p>`:''}</div><div class="head-tools">${view==='dashboard'?button('庫存','data-go="inventory"','primary','inventory'):''}${mode==='ready'?button(view==='inventory'?'重新整理':'讀取最新同步','data-action="refresh-feed"','','refresh'):''}</div></header>`;
   if(mode==='signed-out')return heading+`<section class="card feed-panel"><h2>登入 Portolink</h2><p>使用原本的庫存工作台帳號，即可查看庫存、採購、物流和 Shopee 訂單。</p>
     <form id="feed-login"><label>電子郵件<input class="field" name="email" type="email" autocomplete="username" required></label><label>密碼<input class="field" name="password" type="password" autocomplete="current-password" required></label>
     ${button('登入','','primary').replace('type="button"','type="submit"')}<p class="feed-message" role="status"></p></form></section>`;
@@ -254,7 +254,7 @@ export function feedView(view,state) {
   const options=stageOptions[view];
   const feedKeys=Object.keys(sources).filter(key=>sources[key].view===view);
   const tools=`<div class="stages" role="group" aria-label="作業狀態">${options.map(([label,key])=>`<button class="tab" type="button" data-filter="${key}" aria-pressed="${state.filter===key}">${label}<span class="tab-count">${key.startsWith('shopee')&&!feeds.some(feed=>feed.source===key)?'—':rows.filter(row=>filter(row,key)).length}</span></button>`).join('')}</div>
-    <div class="work-tools"><label class="search-field">${icon('search')}<input class="field" id="view-query" type="text" inputmode="search" placeholder="搜尋商品、訂單或運單" aria-label="搜尋商品、訂單或運單" value="${escape(state.query)}"></label></div>`;
+    <div class="work-tools"><label class="search-field">${icon('search')}<input class="field" id="view-query" type="text" inputmode="text" enterkeyhint="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="搜尋商品、訂單或運單" aria-label="搜尋商品、訂單或運單" value="${escape(state.query)}"></label></div>`;
   const metadata=feedKeys.map(key=>{const feed=feeds.find(row=>row.source===key);return `<span>${sources[key].label} · ${feedStatus(feed)}</span>`;}).join('');
   const trackingChecked=view==='parcels'?rows.reduce((max,row)=>{
     const checked=row.record.tracking?.checkedAt;
