@@ -12,10 +12,9 @@ const demo=createDemo();
 const $=id=>document.getElementById(id);
 const main=$('main'),drawer=$('drawer'),search=$('search-dialog');
 const liveMode=location.protocol==='https:'&&new URLSearchParams(location.search).get('demo')!=='1';
-// Opening the app, including an older overview bookmark, starts with stock.
-// Explicit operational deep links still open their requested module.
-const requestedView=location.hash.slice(1);
-const initialView=views[requestedView]&&requestedView!=='dashboard'?requestedView:'inventory';
+// Always start with stock, including bookmarks saved while another module was open.
+// Module navigation remains available after the app has opened.
+const initialView='inventory';
 if(location.hash!=='#'+initialView)history.replaceState(null,'','#'+initialView);
 const state={
   liveMode,feed:{status:'loading',rows:[],error:null},stock:{items:[],importedAt:null,error:null,model:null,planError:null},supplier:'all',
@@ -74,6 +73,12 @@ function navigate(view,filter=liveMode?'all':initialFilter(view),options={}){
   window.scrollTo({top:0});
 }
 window.addEventListener('hashchange',()=>navigate(location.hash.slice(1)||'inventory'));
+window.addEventListener('pageshow',event=>{
+  if(event.persisted&&state.view!=='inventory'){
+    history.replaceState(null,'','#inventory');
+    navigate('inventory');
+  }
+});
 
 function renderDrawer(kind,id){
   const content=liveMode&&['feed','sources','notifications'].includes(kind)

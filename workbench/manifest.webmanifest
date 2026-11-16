@@ -3,7 +3,7 @@
   "name": "庫存工作台",
   "short_name": "庫存",
   "lang": "zh-Hant",
-  "start_url": "./operations/?v=20261116-inventory-home#inventory",
+  "start_url": "./operations/?v=20261117-inventory-start#inventory",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f5f7f4",
