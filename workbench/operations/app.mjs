@@ -1,10 +1,10 @@
 import {createDemo,knownProducts,products,suppliers} from './data.mjs';
 import {demoConsolidate,readSnapshot,receiptDraft,runReceiptPreview,supplierName,totalUnits,validateImport} from './model.mjs';
 import {drawerModel} from './drawers.mjs?v=20261116-purchases';
-import {button,escape,icon,initialFilter,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs?v=20261116-inventory-home';
+import {button,escape,icon,initialFilter,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs?v=20261117-mobile-clean';
 import {renderSearchPage} from './search-render.mjs?v=20261116-search';
 
-import {feedDrawer,feedSearch,feedView} from './feeds.mjs?v=20261116-inventory-home';
+import {feedDrawer,feedSearch,feedView} from './feeds.mjs?v=20261117-mobile-clean';
 import {SUPABASE_URL,PUBLIC_KEY,loadInventoryCatalog,loadSnapshot} from '../src/data.mjs?v=20261116-purchases';
 import {buildInventoryRows} from './inventory.mjs?v=20261116-purchases';
 
@@ -39,7 +39,7 @@ function renderShell(){
     <span class="side-company">PORTO 3C / VOICity</span></div>`;
   $('topbar').innerHTML=`<a class="top-brand" href="#inventory" data-go="inventory" aria-label="Portolink 庫存首頁">${brandMark}Portolink</a>
     <button class="search-trigger" type="button" data-action="search" aria-label="全域搜尋">${icon('search')}<span>全域搜尋</span><kbd>⌘ K</kbd></button>
-    <div class="top-actions"><button class="source-label" ${openAttrs('sources','')} aria-label="${previewLabel} · 查看來源"><i></i>${previewLabel}</button>${openButton('通知','bell','notifications')}</div>`;
+    <div class="top-actions"><button class="source-label" ${openAttrs('sources','')} aria-label="${previewLabel} · 查看來源"><i></i><span class="source-text">${previewLabel}</span><span class="source-symbol">${icon('lock')}</span></button>${openButton('通知','bell','notifications')}</div>`;
   const order=['inventory','dashboard','purchase','shipping'];
   $('mobile-nav').innerHTML=order.map(key=>{
     const [,label,,short]=modules.find(x=>x[0]===key);
@@ -196,15 +196,17 @@ const actions={
   'import-template':()=>download('preview-shipping-import.json',JSON.stringify([{id:'ES-DEMO-710',source:'EasyStore',brand:'VOICity',lines:[{sku:'HT813',qty:2}]}],null,2),'application/json'),
 };
 document.addEventListener('click',event=>{
+  const filters=main.querySelector('.inventory-filters[open]');
+  if(filters&&!filters.contains(event.target))filters.open=false;
   const element=event.target.closest('button,a[data-go]');
   if(!element)return;
   const d=element.dataset;
   if(d.go){event.preventDefault();navigate(d.go,d.jump||(liveMode?'all':initialFilter(d.go)),{snapshot:d.snapshot==='true'});return;}
   if(d.open){renderDrawer(d.open,d.id);return;}
   if(d.action){actions[d.action]?.(element);return;}
-  if(d.filter){state.filter=d.filter;if(d.filter==='restock')state.supplier='all';state.page=1;renderMain();main.querySelector('[aria-pressed="true"].tab')?.focus({preventScroll:true});return;}
+  if(d.filter){element.closest('.inventory-filters')?.removeAttribute('open');state.filter=d.filter;if(d.filter==='restock')state.supplier='all';state.page=1;renderMain();main.querySelector('[aria-pressed="true"].tab')?.focus({preventScroll:true});return;}
   if(d.supplier!==undefined){state.supplier=d.supplier;state.page=1;renderMain();return;}
-  if(d.gallery){state.gallery=d.gallery;if(['master','channels'].includes(state.filter))state.filter='all';renderMain();return;}
+  if(d.gallery){element.closest('.inventory-filters')?.removeAttribute('open');state.gallery=d.gallery;if(['master','channels'].includes(state.filter))state.filter='all';renderMain();return;}
   if(d.inventoryMode){state.inventoryMode=d.inventoryMode;state.selected.inventory.clear();Object.assign(state,{filter:'all',page:1,query:'',category:''});renderMain();return;}
   if(d.categoryButton){state.filter='all';state.category=d.categoryButton;state.page=1;renderMain();return;}
   if(d.page){state.page=Number(d.page);renderMain();return;}
@@ -247,8 +249,8 @@ document.addEventListener('change',async event=>{
     }catch(error){message.textContent=error.message;}
     return;
   }
-  if(input.id==='supplier-filter'){state.supplier=input.value;state.page=1;renderMain();return;}
-  if(['channel','category','sort'].includes(input.id)){state[input.id]=input.value;state.page=1;renderMain();return;}
+  if(input.id==='supplier-filter'){state.supplier=input.value;state.page=1;input.closest('.inventory-filters')?.removeAttribute('open');renderMain();return;}
+  if(['channel','category','sort'].includes(input.id)){state[input.id]=input.value;state.page=1;input.closest('.inventory-filters')?.removeAttribute('open');renderMain();return;}
   if(input.dataset.selectVisible==='shipping'){
     for(const order of shippingRows(state,demo)){
       if(input.checked)state.selected.shipping.add(order.id);else state.selected.shipping.delete(order.id);

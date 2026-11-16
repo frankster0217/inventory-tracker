@@ -22,6 +22,7 @@ const paths = {
   check:'<path d="m5 12 4 4L19 6"/>',
   more:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
   table:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18m-18 5h18m-12-5v9"/>',
+  filter:'<path d="M4 6h16M7 12h10m-7 6h4"/>',
   close:'<path d="m6 6 12 12M18 6 6 18"/>',
   refresh:'<path d="M20 7v5h-5M4 17v-5h5m-5 0a8 8 0 0 1 13-6l3 3M4 15l3 3a8 8 0 0 0 13-6"/>',
   upload:'<path d="M12 16V4m-5 5 5-5 5 5M4 16v4h16v-4"/>',
@@ -73,7 +74,7 @@ const inventoryViews = [['all','全部商品'],['categories','商品分類'],['m
 const stockTabs = [['low','低庫存'],['immediate','立即補貨'],['replenish','建議補貨'],['incoming','採購在途'],['zero','缺貨'],['sufficient','暫不需補貨']];
 const stages = (list,current,count) => `<div class="stages" role="group" aria-label="作業狀態">${list.map(([value,label])=>`<button class="tab" type="button" data-filter="${value}" aria-pressed="${current===value}">${label}<span class="tab-count">${count(value)}</span></button>`).join('')}</div>`;
 const toggle = (options,current,action) => `<div class="toggle" role="group" aria-label="顯示方式">${options.map(([value,label,glyph])=>`<button data-${action}="${value}" aria-pressed="${current===value}">${glyph?icon(glyph):''}${label}</button>`).join('')}</div>`;
-const field = (value,label='搜尋目前清單') => `<label class="search-field">${icon('search')}<input type="text" inputmode="text" enterkeyhint="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" class="field" aria-label="${label}" placeholder="${label}" id="view-query" value="${escape(value)}"></label>`;
+const field = (value,label='搜尋目前清單',placeholder=label) => `<label class="search-field">${icon('search')}<input type="text" inputmode="text" enterkeyhint="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" class="field" aria-label="${label}" placeholder="${placeholder}" id="view-query" value="${escape(value)}"></label>`;
 const select = (id,title,options,current) => `<select id="${id}" class="select" aria-label="${title}">${options.map(([value,label])=>`<option value="${escape(value)}" ${value===current?'selected':''}>${escape(label)}</option>`).join('')}</select>`;
 const filterSelect = (label,list,current) => `<select class="select" data-filter-select aria-label="${label}">${list.some(([key])=>key===current)?'':'<option value="" disabled selected>選擇檢視</option>'}${list.map(([value,text])=>`<option value="${value}" ${current===value?'selected':''}>${text}</option>`).join('')}</select>`;
 const toolbar = (query,label,controls='',advanced='') => `<div class="work-tools"><div class="filters">${field(query,label)}${controls}</div>${advanced?`<details class="extra-filters" data-disclosure="filters"><summary>篩選與排序</summary><div class="chips">${advanced}</div></details>`:''}</div>`;
@@ -164,6 +165,7 @@ function productCard(p) {
     ${p.available<=p.threshold||p.archived||p.service?productStatus(p):''}</span></button>`;
 }
 const pageNav = (count,page,pages) => `<div class="page-nav"><span class="muted">${count} 項商品 · ${page} / ${pages}</span><div class="row-buttons">${button('上一頁',`data-page="${page-1}" ${page<=1?'disabled':''}`,'small','left')}${button('下一頁',`data-page="${page+1}" ${page>=pages?'disabled':''}`,'small','chevron')}</div></div>`;
+const compactIncoming = p => p.incoming===null?(p.recordedIncoming>0?fmt(p.recordedIncoming)+'+':'—'):fmt(p.incoming);
 const stockCount = p => p.stock===null?'待確認':`${fmt(p.stock)}${p.unit?' '+escape(p.unit):''}`;
 export const incomingCount = p => p.incoming===null ? (p.recordedIncoming>0?`${fmt(p.recordedIncoming)}+ 待對帳`:'待對帳') : fmt(p.incoming);
 export const suggestionCount = p => p.suggestion===null
@@ -184,7 +186,7 @@ const inventoryNotice=stock=>{
 };
 const restockSupplierSections=(groups,renderItems,overview=false)=>`<div class="restock-groups">${groups.map((g,index)=>{
   const heading=overview?'h3':'h2',id=`${overview?'overview':'inventory'}-restock-supplier-${index}`;
-  return `<section class="restock-supplier" aria-labelledby="${id}"><header class="restock-supplier-head"><${heading} id="${id}">${escape(g.name)}</${heading}><span>${g.items.length} 項商品</span></header>${renderItems(g.items)}</section>`;
+    return `<section class="restock-supplier" aria-labelledby="${id}"><header class="restock-supplier-head"><${heading} id="${id}">${escape(g.name)}</${heading}><span aria-label="${g.items.length} 項商品">${g.items.length}</span></header>${renderItems(g.items)}</section>`;
 }).join('')}</div>`;
 export function restockOverview(state) {
   const {items,model,planError}=state.stock;
@@ -207,41 +209,43 @@ export function liveInventory(state) {
   const searched=scoped.filter(p=>match([p.sku,p.name,p.supplier].join(' '),state.query));
   const matchingGroups=inventoryGroups(searched);
   const rows=searched.filter(p=>state.supplier==='all'||state.supplier===p.supplierId)
-    .sort((a,b)=>(restock?Number(b.urgent)-Number(a.urgent):0)||(state.sort==='stock'?(a.stock??Infinity)-(b.stock??Infinity):0)||a.sku.localeCompare(b.sku,'zh-TW'));
+    .sort((a,b)=>Number(a.archived)-Number(b.archived)||(restock?Number(b.urgent)-Number(a.urgent):0)||(state.sort==='stock'?(a.stock??Infinity)-(b.stock??Infinity):0)||a.sku.localeCompare(b.sku,'zh-TW'));
   const pages=Math.max(1,Math.ceil(rows.length/24)),page=Math.min(state.page,pages);
   const ordered=state.supplier==='all'?inventoryGroups(rows).flatMap(g=>g.items):rows;
   const chunk=ordered.slice((page-1)*24,page*24);
   const stamp=Date.parse(importedAt);
   const imported=Number.isFinite(stamp)?'庫存匯入 '+dateShort(stamp):'庫存匯入時間未確認';
   const label=p=>p.archived?chip('已封存'):p.referenceSuggestion>0?chip('待更新'):p.urgent?chip('優先補貨','amber'):needsRestock(p)?chip('需補貨','amber'):p.stock===0?chip('缺貨','amber'):'';
-  const tabs=`<div class="stages inventory-tabs" role="group" aria-label="庫存檢視">${[['all','全部商品',items.length],['restock','需補貨',items.filter(needsRestock).length],['zero','缺貨',items.filter(p=>!p.archived&&p.stock===0).length],['archived','已封存',items.filter(p=>p.archived).length]].map(([value,title,count])=>`<button class="tab" data-filter="${value}" aria-pressed="${state.filter===value}">${title}<span class="tab-count">${items.some(p=>displayedSuggestion(p)!==null)||value!=='restock'?count:'—'}</span></button>`).join('')}</div>`;
+  const tabs=`<div class="stages inventory-tabs" role="group" aria-label="庫存檢視">${[['all','全部商品',items.length],['restock','需補貨',items.filter(needsRestock).length],['zero','缺貨',items.filter(p=>!p.archived&&p.stock===0).length]].map(([value,title,count])=>`<button class="tab" data-filter="${value}" aria-pressed="${state.filter===value}">${title}<span class="tab-count">${items.some(p=>displayedSuggestion(p)!==null)||value!=='restock'?count:'—'}</span></button>`).join('')}</div>`;
   const supplierSelect=select('supplier-filter','依供應商篩選',[['all','全部供應商'],...groups.map(g=>[g.id,g.name])],state.supplier);
-  const tools=toolbar(state.query,'搜尋品名、SKU 或供應商',supplierSelect,
-    toggle([['table','表格','table'],['gallery','圖庫','dashboard']],state.gallery,'gallery')+select('sort','排序',[['sku','SKU 排序'],['stock','庫存由低到高']],state.sort));
+  const tools=`<div class="work-tools inventory-tools">${field(state.query,'搜尋品名、SKU 或供應商','搜尋商品、SKU')}<details class="inventory-filters" data-disclosure="inventory-filters"><summary aria-label="篩選與顯示">${icon('filter')}<span>篩選</span>${state.supplier!=='all'||state.filter==='archived'?'<i class="filter-dot"></i>':''}</summary><div class="inventory-filter-panel"><label>供應商${supplierSelect}</label><div class="inventory-filter-field"><span>顯示方式</span>${toggle([['table','表格','table'],['gallery','圖庫','dashboard']],state.gallery,'gallery')}</div><label>排序${select('sort','排序',[['sku','SKU 排序'],['stock','庫存由低到高']],state.sort)}</label><button class="button quiet" data-filter="archived" aria-pressed="${state.filter==='archived'}">已封存 <span>${items.filter(p=>p.archived).length}</span></button></div></details></div>`;
   const salesStamp=state.stock.model?.sources.sales.timestamp;
   const meta=`<div class="feed-metadata"><span>${imported}</span><span>讀取 ${dateShort(Date.now())}</span><span>銷售同步 ${salesStamp?dateShort(Date.parse(salesStamp)):'時間未確認'}</span>${error?`<span role="status">${escape(error)}</span>`:''}</div>`;
   const rules=restock?`<details class="restock-rules" data-disclosure="restock-rules"><summary>補貨依據 · 近 60 天銷量</summary><p>目標 ${fmt(cfg?.targetWeeks??4)} 週 + 交期 ${fmt(cfg?.leadTimeDays??4)} 天，預留 10%，扣除現有庫存及已核對在途。最低建議 ${fmt(cfg?.minOrderQty??5)} 件。</p></details>`:'';
   const stale=items.some(p=>p.referenceSuggestion!==null&&p.referenceSuggestion!==undefined);
+  const dataState=error||state.stock.planError?'同步異常':stale?'資料待更新':!state.stock.model?'資料待核對':!state.stock.model.sources.stock.fresh?'庫存待更新':items.some(p=>p.suggestion>0&&!p.verified)?'補貨估算':!state.stock.model.sources.purchasesComplete?'在途待核對':'資料狀態';
+  const sync=`<details class="inventory-sync" data-disclosure="inventory-sync"><summary><span>${Number.isFinite(stamp)?'更新 '+dateShort(stamp):'更新時間未確認'}</span><span class="inventory-sync-state">${dataState}${icon('chevron')}</span></summary><div class="inventory-sync-details">${meta}${inventoryNotice(state.stock)}${rules}<p>— 表示資料未確認。點選商品可查看完整品名、在途及補貨依據。</p></div></details>`;
   const stockLabel=state.stock.model&&!state.stock.model.sources.stock.fresh?'上次庫存':'現有庫存';
   const suggestionLabel=stale?'參考補貨量':'建議補貨';
-  const productList=(products,grouped=false)=>state.gallery==='table'
-    ?table(['商品 / SKU',stockLabel,'採購在途',suggestionLabel,'狀態'],products.map(p=>[
-      `<button type="button" class="product-cell stock-item" ${openAttrs('inventory-live',p.sku)} aria-label="${escape(p.sku)}">${photo(p)}<span class="cell-stack"><strong>${escape(p.sku)}</strong><small>${escape(p.name)}</small>${!grouped&&state.supplier==='all'?`<small>${escape(p.supplier)}</small>`:''}</span></button>`,
-      `<span class="mobile-column">${stockLabel} </span><strong>${stockCount(p)}</strong>`,
-      `<span class="mobile-column">在途 </span>${incomingCount(p)}`,
-      `<span class="mobile-column">${suggestionLabel} </span>${suggestionCount(p)}`,label(p)
+  const productList=(products,grouped=false)=>`<div class="inventory-products" data-inventory-mode="${restock?'restock':'all'}">`+(state.gallery==='table'
+    ?table(['<span class="desktop-value">商品 / SKU</span><span class="mobile-value">商品</span>',`<span class="desktop-value">${stockLabel}</span><span class="mobile-value">${stockLabel==='上次庫存'?'上次':'庫存'}</span>`,`<span class="desktop-value">採購在途</span><span class="mobile-value">在途</span>`,`<span class="desktop-value">${suggestionLabel}</span><span class="mobile-value">${stale?'參考補':'建議補'}</span>`,'狀態'],products.map(p=>[
+      `<button type="button" class="product-cell stock-item" ${openAttrs('inventory-live',p.sku)} aria-label="${escape(p.sku)}">${photo(p)}<span class="cell-stack"><strong>${escape(/^[A-Z]\d{6,}$/i.test(p.sku)?p.name:p.sku)}</strong><small class="stock-description">${escape(/^[A-Z]\d{6,}$/i.test(p.sku)?p.sku:p.name)}</small>${p.archived?'<span class="mobile-value stock-archived">封存</span>':''}${!grouped&&state.supplier==='all'?`<small class="stock-description">${escape(p.supplier)}</small>`:''}</span></button>`,
+      `<strong class="desktop-value">${stockCount(p)}</strong><strong class="mobile-value" aria-label="${escape(stockLabel+' '+(p.stock===null?'待確認':p.stock)+(p.unit||''))}">${p.stock===null?'—':fmt(p.stock)}${p.unit?`<small class="stock-unit">${escape(p.unit)}</small>`:''}</strong>`,
+      `<span class="desktop-value">${incomingCount(p)}</span><span class="mobile-value" aria-label="${escape('採購在途 '+(p.incoming===null?'待對帳':p.incoming))}">${compactIncoming(p)}</span>`,
+      suggestionCount(p),label(p)
     ]),'stock',['identity','available','incoming','replenish','status'])
     :`<div class="records">${products.map(p=>`<button class="card product-card" ${openAttrs('inventory-live',p.sku)}>${photo(p,'photo')}<span class="card-body">
       <strong class="product-code">${escape(p.sku)}</strong><span class="product-brand">${escape(p.name)}</span>
-      <span class="stats-line"><span>${stockLabel} <b>${stockCount(p)}</b></span><span>在途 ${incomingCount(p)}</span></span>
+      <span class="stats-line"><span><span class="desktop-value">${stockLabel}</span><span class="mobile-value">庫存</span> <b>${stockCount(p)}</b></span><span>在途 <span class="desktop-value">${incomingCount(p)}</span><b class="mobile-value">${compactIncoming(p)}</b></span></span>
       <span class="stock-card-replenish">${suggestionLabel} ${suggestionCount(p)}</span>${label(p)}
-    </span></button>`).join('')}</div>`;
-  const supplierHeading=!restock&&state.supplier!=='all'?`<div class="supplier-heading">${button('全部供應商','data-supplier="all"','quiet','left')}<h2>${escape(groups.find(g=>g.id===state.supplier)?.name??'供應商未指派')}</h2></div>`:'';
+    </span></button>`).join('')}</div>`)+`</div>`;
+  const supplierHeading=!restock&&state.supplier!=='all'?`<div class="supplier-heading"><h2>${escape(groups.find(g=>g.id===state.supplier)?.name??'供應商未指派')}</h2><button class="icon-btn" type="button" data-supplier="all" aria-label="全部供應商">${icon('close')}</button></div>`:'';
   const groupedList=()=>`<div class="inventory-groups" aria-label="依供應商分類">${inventoryGroups(chunk).map(g=>{
     const total=matchingGroups.find(group=>group.id===g.id)?.items.length??g.items.length;
-    return `<section class="inventory-supplier"><header class="inventory-supplier-head"><h2><button class="link" data-supplier="${escape(g.id)}">${escape(g.name)}</button></h2><span>${g.items.length<total?g.items.length+' / ':''}${total} 項商品</span></header>${productList(g.items,true)}</section>`;
+    return `<section class="inventory-supplier"><header class="inventory-supplier-head"><h2><button class="link" data-supplier="${escape(g.id)}">${escape(g.name)}</button></h2><span aria-label="${total} 項商品">${total}</span></header>${productList(g.items,true)}</section>`;
   }).join('')}</div>`;
-  return tabs+tools+meta+inventoryNotice(state.stock)+rules+supplierHeading+(rows.length?
+  const activeFilter=state.filter==='archived'?`<div class="inventory-filter-caption"><span>已封存商品</span><button class="link" data-filter="all">返回全部</button></div>`:'';
+  return tabs+tools+sync+activeFilter+supplierHeading+(rows.length?
     (restock?restockSupplierSections(inventoryGroups(rows),items=>productList(items,true)):(state.supplier==='all'?groupedList():productList(chunk))+(pages>1?pageNav(rows.length,page,pages):`<div class="page-nav muted">${rows.length} 項商品</div>`)):
     empty(restock&&state.stock.planError?'補貨資料暫時無法取得，請重新整理。':restock&&!items.some(p=>displayedSuggestion(p)!==null)?'補貨資料尚未齊全，暫無可顯示的清單。':restock&&!scoped.length?'目前沒有達到補貨門檻的商品。':'找不到符合的商品。'));
 }

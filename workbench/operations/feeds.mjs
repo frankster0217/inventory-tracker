@@ -1,4 +1,4 @@
-import {button, chip, escape, icon, liveInventory, restockOverview, openAttrs, recordLink} from './views.mjs?v=20261116-inventory-home';
+import {button, chip, escape, icon, liveInventory, restockOverview, openAttrs, recordLink} from './views.mjs?v=20261117-mobile-clean';
 import {inboundSummary,receivingView,receivingDrawer} from './inbound.mjs?v=20261116-search';
 
 const sources={
@@ -226,7 +226,8 @@ function sourceSummary(feeds) {
 export function feedView(view,state) {
   const [title,purpose]=pages[view];
   const {rows:feeds,status:mode,error}=state.feed;
-  const heading=`<header class="page-head"><div><h1>${title}</h1>${purpose?`<p>${purpose}</p>`:''}</div><div class="head-tools">${view==='dashboard'?button('庫存','data-go="inventory"','primary','inventory'):''}${mode==='ready'?button(view==='inventory'?'重新整理':'讀取最新同步','data-action="refresh-feed"','','refresh'):''}</div></header>`;
+  const refresh=view==='inventory'?`<button class="button inventory-refresh" type="button" data-action="refresh-feed" aria-label="重新整理">${icon('refresh')}<span>重新整理</span></button>`:button('讀取最新同步','data-action="refresh-feed"','','refresh');
+  const heading=`<header class="page-head"><div><h1>${title}</h1>${purpose?`<p>${purpose}</p>`:''}</div><div class="head-tools">${view==='dashboard'?button('庫存','data-go="inventory"','primary','inventory'):''}${mode==='ready'?refresh:''}</div></header>`;
   if(mode==='signed-out')return heading+`<section class="card feed-panel"><h2>登入 Portolink</h2><p>使用原本的庫存工作台帳號，即可查看庫存、採購、物流和 Shopee 訂單。</p>
     <form id="feed-login"><label>電子郵件<input class="field" name="email" type="email" autocomplete="username" required></label><label>密碼<input class="field" name="password" type="password" autocomplete="current-password" required></label>
     ${button('登入','','primary').replace('type="button"','type="submit"')}<p class="feed-message" role="status"></p></form></section>`;
