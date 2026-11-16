@@ -1,10 +1,10 @@
 import {createDemo,knownProducts,products,suppliers} from './data.mjs';
 import {demoConsolidate,readSnapshot,receiptDraft,runReceiptPreview,supplierName,totalUnits,validateImport} from './model.mjs';
 import {drawerModel} from './drawers.mjs?v=20261116-purchases';
-import {button,escape,icon,initialFilter,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs?v=20261116-search';
+import {button,escape,icon,initialFilter,moduleInventory,modules,openAttrs,recordLink,shippingRows,sourceForReceiving,views} from './views.mjs?v=20261116-inventory-home';
 import {renderSearchPage} from './search-render.mjs?v=20261116-search';
 
-import {feedDrawer,feedSearch,feedView} from './feeds.mjs?v=20261116-search';
+import {feedDrawer,feedSearch,feedView} from './feeds.mjs?v=20261116-inventory-home';
 import {SUPABASE_URL,PUBLIC_KEY,loadInventoryCatalog,loadSnapshot} from '../src/data.mjs?v=20261116-purchases';
 import {buildInventoryRows} from './inventory.mjs?v=20261116-purchases';
 
@@ -12,10 +12,15 @@ const demo=createDemo();
 const $=id=>document.getElementById(id);
 const main=$('main'),drawer=$('drawer'),search=$('search-dialog');
 const liveMode=location.protocol==='https:'&&new URLSearchParams(location.search).get('demo')!=='1';
+// Opening the app, including an older overview bookmark, starts with stock.
+// Explicit operational deep links still open their requested module.
+const requestedView=location.hash.slice(1);
+const initialView=views[requestedView]&&requestedView!=='dashboard'?requestedView:'inventory';
+if(location.hash!=='#'+initialView)history.replaceState(null,'','#'+initialView);
 const state={
   liveMode,feed:{status:'loading',rows:[],error:null},stock:{items:[],importedAt:null,error:null,model:null,planError:null},supplier:'all',
   localPreview:['127.0.0.1','localhost'].includes(location.hostname),
-  view:views[location.hash.slice(1)]?location.hash.slice(1):'dashboard',
+  view:initialView,
   filter:liveMode?'all':initialFilter(location.hash.slice(1)),query:'',sort:'sku',channel:'',category:'',page:1,gallery:liveMode?'table':'gallery',inventoryMode:'demo',
   snapshot:null,snapshotItems:[],snapshotError:null,products,selected:{inventory:new Set(),shipping:new Set(),parcels:new Set()},
   ledger:new Map(),collapsed:false,
@@ -28,15 +33,15 @@ function renderShell(){
   document.querySelector('.shell').classList.toggle('collapsed',state.collapsed);
   const active=key=>state.view===key?'aria-current="page"':'';
   const previewLabel=liveMode?'私人資料':'示例資料';
-  $('sidebar').innerHTML=`<a class="brand" href="#dashboard" data-go="dashboard" aria-label="Portolink Operations 首頁">${brandMark}<span class="brand-text"><span class="brand-name">Portolink</span><span class="brand-sub">Operations</span></span></a>
+  $('sidebar').innerHTML=`<a class="brand" href="#inventory" data-go="inventory" aria-label="Portolink Operations 庫存首頁">${brandMark}<span class="brand-text"><span class="brand-name">Portolink</span><span class="brand-sub">Operations</span></span></a>
     <nav class="side-links" aria-label="主導覽">
     ${modules.map(([key,label])=>`<button class="side-link" type="button" data-go="${key}" aria-label="${label}" title="${label}" ${active(key)}>${icon(key)}<span class="side-copy">${label}</span></button>`).join('')}</nav>
     <div class="side-end"><button class="side-link side-collapse" data-action="sidebar" aria-label="${state.collapsed?'展開側邊欄':'收合側邊欄'}" aria-expanded="${!state.collapsed}">${icon('collapse')}<span class="side-copy">收合側邊欄</span></button>
     <span class="side-company">PORTO 3C / VOICity</span></div>`;
-  $('topbar').innerHTML=`<a class="top-brand" href="#dashboard" data-go="dashboard" aria-label="Portolink 首頁">${brandMark}Portolink</a>
+  $('topbar').innerHTML=`<a class="top-brand" href="#inventory" data-go="inventory" aria-label="Portolink 庫存首頁">${brandMark}Portolink</a>
     <button class="search-trigger" type="button" data-action="search" aria-label="全域搜尋">${icon('search')}<span>全域搜尋</span><kbd>⌘ K</kbd></button>
     <div class="top-actions"><button class="source-label" ${openAttrs('sources','')} aria-label="${previewLabel} · 查看來源"><i></i>${previewLabel}</button>${openButton('通知','bell','notifications')}</div>`;
-  const order=['dashboard','inventory','purchase','shipping'];
+  const order=['inventory','dashboard','purchase','shipping'];
   $('mobile-nav').innerHTML=order.map(key=>{
     const [,label,,short]=modules.find(x=>x[0]===key);
     return `<button type="button" data-go="${key}" ${active(key)} aria-label="${label}">${icon(key)}${short}</button>`;
@@ -68,7 +73,7 @@ function navigate(view,filter=liveMode?'all':initialFilter(view),options={}){
   main.focus({preventScroll:true});
   window.scrollTo({top:0});
 }
-window.addEventListener('hashchange',()=>navigate(location.hash.slice(1)||'dashboard'));
+window.addEventListener('hashchange',()=>navigate(location.hash.slice(1)||'inventory'));
 
 function renderDrawer(kind,id){
   const content=liveMode&&['feed','sources','notifications'].includes(kind)

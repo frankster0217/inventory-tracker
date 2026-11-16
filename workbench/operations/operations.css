@@ -419,6 +419,12 @@ dialog::backdrop { background: #26282264; }
 .drawer-content h4 { margin: 14px 0 6px; }
 
 /* One inventory workspace: suppliers first, quantities at a glance. */
+.inventory-groups { display:grid; gap:20px; }
+.inventory-supplier { min-width:0; }
+.inventory-supplier-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+.inventory-supplier-head h2 { margin:0; font-size:20px; line-height:1.4; }
+.inventory-supplier-head .link { min-height:44px; color:var(--ink); font:inherit; text-align:left; }
+.inventory-supplier-head > span { flex-shrink:0; font-size:14px; color:var(--sub); }
 .supplier-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
 .supplier-card { display:flex; flex-direction:column; gap:14px; min-height:168px; padding:18px; text-align:left; }
 .supplier-card:hover { border-color:#bca14e; background:#fffdf5; }

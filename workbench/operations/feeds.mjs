@@ -1,4 +1,4 @@
-import {button, chip, escape, icon, liveInventory, restockOverview, openAttrs, recordLink} from './views.mjs?v=20261116-search';
+import {button, chip, escape, icon, liveInventory, restockOverview, openAttrs, recordLink} from './views.mjs?v=20261116-inventory-home';
 import {inboundSummary,receivingView,receivingDrawer} from './inbound.mjs?v=20261116-search';
 
 const sources={

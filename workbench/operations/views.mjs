@@ -50,8 +50,8 @@ const dateShort = at => new Intl.DateTimeFormat('zh-TW',{timeZone:'Asia/Taipei',
 export const displayTime = dateShort;
 
 export const modules = [
-  ['dashboard','總覽','Overview','今日'],
   ['inventory','庫存','Inventory','庫存'],
+  ['dashboard','總覽','Overview','今日'],
   ['shipping','出貨','Shipping','出貨'],
   ['purchase','採購','Purchasing','採購'],
   ['parcels','集運','Consolidation','集運'],
@@ -209,11 +209,11 @@ export function liveInventory(state) {
   const rows=searched.filter(p=>state.supplier==='all'||state.supplier===p.supplierId)
     .sort((a,b)=>(restock?Number(b.urgent)-Number(a.urgent):0)||(state.sort==='stock'?(a.stock??Infinity)-(b.stock??Infinity):0)||a.sku.localeCompare(b.sku,'zh-TW'));
   const pages=Math.max(1,Math.ceil(rows.length/24)),page=Math.min(state.page,pages);
-  const chunk=rows.slice((page-1)*24,page*24);
+  const ordered=state.supplier==='all'?inventoryGroups(rows).flatMap(g=>g.items):rows;
+  const chunk=ordered.slice((page-1)*24,page*24);
   const stamp=Date.parse(importedAt);
   const imported=Number.isFinite(stamp)?'庫存匯入 '+dateShort(stamp):'庫存匯入時間未確認';
   const label=p=>p.archived?chip('已封存'):p.referenceSuggestion>0?chip('待更新'):p.urgent?chip('優先補貨','amber'):needsRestock(p)?chip('需補貨','amber'):p.stock===0?chip('缺貨','amber'):'';
-  const supplierCards=!restock&&state.supplier==='all'&&!state.query;
   const tabs=`<div class="stages inventory-tabs" role="group" aria-label="庫存檢視">${[['all','全部商品',items.length],['restock','需補貨',items.filter(needsRestock).length],['zero','缺貨',items.filter(p=>!p.archived&&p.stock===0).length],['archived','已封存',items.filter(p=>p.archived).length]].map(([value,title,count])=>`<button class="tab" data-filter="${value}" aria-pressed="${state.filter===value}">${title}<span class="tab-count">${items.some(p=>displayedSuggestion(p)!==null)||value!=='restock'?count:'—'}</span></button>`).join('')}</div>`;
   const supplierSelect=select('supplier-filter','依供應商篩選',[['all','全部供應商'],...groups.map(g=>[g.id,g.name])],state.supplier);
   const tools=toolbar(state.query,'搜尋品名、SKU 或供應商',supplierSelect,
@@ -221,7 +221,6 @@ export function liveInventory(state) {
   const salesStamp=state.stock.model?.sources.sales.timestamp;
   const meta=`<div class="feed-metadata"><span>${imported}</span><span>讀取 ${dateShort(Date.now())}</span><span>銷售同步 ${salesStamp?dateShort(Date.parse(salesStamp)):'時間未確認'}</span>${error?`<span role="status">${escape(error)}</span>`:''}</div>`;
   const rules=restock?`<details class="restock-rules" data-disclosure="restock-rules"><summary>補貨依據 · 近 60 天銷量</summary><p>目標 ${fmt(cfg?.targetWeeks??4)} 週 + 交期 ${fmt(cfg?.leadTimeDays??4)} 天，預留 10%，扣除現有庫存及已核對在途。最低建議 ${fmt(cfg?.minOrderQty??5)} 件。</p></details>`:'';
-  const cards=`<div class="supplier-grid" aria-label="依供應商分類">${matchingGroups.map(g=>`<button class="card supplier-card" data-supplier="${escape(g.id)}"><span class="supplier-card-label">${icon('purchase')}供應商</span><strong>${escape(g.name)}</strong><span class="supplier-card-foot"><span>${g.items.length} 項商品${restock?' · '+g.items.reduce((n,p)=>n+p.suggestion,0)+' 件建議補貨':''}</span>${icon('chevron')}</span></button>`).join('')}</div>`;
   const stale=items.some(p=>p.referenceSuggestion!==null&&p.referenceSuggestion!==undefined);
   const stockLabel=state.stock.model&&!state.stock.model.sources.stock.fresh?'上次庫存':'現有庫存';
   const suggestionLabel=stale?'參考補貨量':'建議補貨';
@@ -238,8 +237,12 @@ export function liveInventory(state) {
       <span class="stock-card-replenish">${suggestionLabel} ${suggestionCount(p)}</span>${label(p)}
     </span></button>`).join('')}</div>`;
   const supplierHeading=!restock&&state.supplier!=='all'?`<div class="supplier-heading">${button('全部供應商','data-supplier="all"','quiet','left')}<h2>${escape(groups.find(g=>g.id===state.supplier)?.name??'供應商未指派')}</h2></div>`:'';
+  const groupedList=()=>`<div class="inventory-groups" aria-label="依供應商分類">${inventoryGroups(chunk).map(g=>{
+    const total=matchingGroups.find(group=>group.id===g.id)?.items.length??g.items.length;
+    return `<section class="inventory-supplier"><header class="inventory-supplier-head"><h2><button class="link" data-supplier="${escape(g.id)}">${escape(g.name)}</button></h2><span>${g.items.length<total?g.items.length+' / ':''}${total} 項商品</span></header>${productList(g.items,true)}</section>`;
+  }).join('')}</div>`;
   return tabs+tools+meta+inventoryNotice(state.stock)+rules+supplierHeading+(rows.length?
-    (restock?restockSupplierSections(inventoryGroups(rows),items=>productList(items,true)):supplierCards?cards:productList(chunk)+(pages>1?pageNav(rows.length,page,pages):`<div class="page-nav muted">${rows.length} 項商品</div>`)):
+    (restock?restockSupplierSections(inventoryGroups(rows),items=>productList(items,true)):(state.supplier==='all'?groupedList():productList(chunk))+(pages>1?pageNav(rows.length,page,pages):`<div class="page-nav muted">${rows.length} 項商品</div>`)):
     empty(restock&&state.stock.planError?'補貨資料暫時無法取得，請重新整理。':restock&&!items.some(p=>displayedSuggestion(p)!==null)?'補貨資料尚未齊全，暫無可顯示的清單。':restock&&!scoped.length?'目前沒有達到補貨門檻的商品。':'找不到符合的商品。'));
 }
 export function inventory(state,demo) {
